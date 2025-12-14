@@ -40,7 +40,6 @@ jobs:
     needs: detect-changes
     if: |
       needs.detect-changes.outputs.debug-tts == 'true' ||
-      github.event_name == 'release' ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
