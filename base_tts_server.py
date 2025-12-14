@@ -3,6 +3,7 @@ Base TTS Engine Server - Abstract FastAPI Server for TTS Engines
 
 Extends BaseEngineServer with TTS-specific functionality:
 - /generate endpoint for audio synthesis
+- /samples/check and /samples/upload endpoints for speaker sample management
 - generate_audio() abstract method
 
 TTS engine servers inherit from this class and implement:
@@ -11,8 +12,9 @@ TTS engine servers inherit from this class and implement:
 - generate_audio(text, language, speaker_wav, parameters) -> bytes
 - unload_model()
 """
-from fastapi import Response, HTTPException
+from fastapi import Response, HTTPException, File, Form, UploadFile
 from typing import Dict, Any, Union, List
+from pathlib import Path
 from abc import abstractmethod
 from loguru import logger
 import traceback
@@ -20,14 +22,24 @@ import traceback
 from base_server import BaseEngineServer, CamelCaseModel, ModelInfo as ModelInfo
 
 
-# ============= TTS-Specific Request Model =============
+# ============= TTS-Specific Request Models =============
 
 class GenerateRequest(CamelCaseModel):
     """Request to generate TTS audio"""
     text: str
     language: str  # Required (engine can ignore if not needed)
-    tts_speaker_wav: Union[str, List[str]]  # Path(s) to speaker sample(s)
+    tts_speaker_wav: Union[str, List[str]]  # Filename(s) in samples_dir
     parameters: Dict[str, Any] = {}  # Engine-specific params
+
+
+class SampleCheckRequest(CamelCaseModel):
+    """Check which samples exist in engine"""
+    sample_ids: List[str]  # List of sample UUIDs (without .wav extension)
+
+
+class SampleCheckResponse(CamelCaseModel):
+    """Response with missing sample IDs"""
+    missing: List[str]  # Sample UUIDs not found in engine
 
 
 # ============= Base TTS Server =============
@@ -57,8 +69,27 @@ class BaseTTSServer(BaseEngineServer):
         """
         super().__init__(engine_name, display_name)
 
+        # Determine samples directory based on environment
+        # Docker: /app/samples (can be mounted for persistence)
+        # Subprocess: ./samples/ (relative to engine dir)
+        if Path("/app").exists():
+            # Docker container - use /app/samples
+            self.samples_dir = Path("/app/samples")
+        else:
+            # Subprocess on Windows/Linux - use engine-local dir
+            # Derived from server.py location (e.g., backend/engines/tts/xtts/samples/)
+            import sys
+            if sys.argv[0]:
+                self.samples_dir = Path(sys.argv[0]).parent / "samples"
+            else:
+                self.samples_dir = Path(__file__).parent / "samples"
+
+        self.samples_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"[{self.engine_name}] Samples directory: {self.samples_dir}")
+
         # Setup TTS-specific routes
         self._setup_generate_route()
+        self._setup_sample_routes()
 
         logger.info(f"[{self.engine_name}] BaseTTSServer initialized")
 
@@ -112,6 +143,43 @@ class BaseTTSServer(BaseEngineServer):
                 logger.error(traceback.format_exc())
                 raise HTTPException(status_code=500, detail=str(e))
 
+    def _setup_sample_routes(self):
+        """Setup speaker sample management endpoints"""
+
+        @self.app.post("/samples/check", response_model=SampleCheckResponse)
+        async def check_samples(request: SampleCheckRequest):
+            """Check which samples exist in the engine's samples directory"""
+            missing = []
+            for sample_id in request.sample_ids:
+                sample_path = self.samples_dir / f"{sample_id}.wav"
+                if not sample_path.exists():
+                    missing.append(sample_id)
+
+            logger.debug(
+                f"[{self.engine_name}] Sample check: "
+                f"{len(request.sample_ids)} requested, {len(missing)} missing"
+            )
+            return SampleCheckResponse(missing=missing)
+
+        @self.app.post("/samples/upload")
+        async def upload_sample(
+            sample_id: str = Form(...),
+            file: UploadFile = File(...)
+        ):
+            """Upload a speaker sample to the engine's samples directory"""
+            dest = self.samples_dir / f"{sample_id}.wav"
+
+            # Read and write file content
+            content = await file.read()
+            with open(dest, "wb") as f:
+                f.write(content)
+
+            logger.info(
+                f"[{self.engine_name}] Sample uploaded: {sample_id}.wav "
+                f"({len(content)} bytes)"
+            )
+            return {"status": "ok", "sampleId": sample_id}
+
     # ============= TTS-Specific Abstract Method =============
 
     @abstractmethod
@@ -128,7 +196,8 @@ class BaseTTSServer(BaseEngineServer):
         Args:
             text: Text to synthesize
             language: Language code (e.g., "en", "de")
-            speaker_wav: Path(s) to speaker sample(s)
+            speaker_wav: Filename(s) in samples_dir (e.g., "uuid.wav" or ["uuid1.wav", "uuid2.wav"])
+                         Engine implementations should resolve to full path via self.samples_dir
             parameters: Engine-specific parameters (temperature, speed, etc.)
 
         Returns:

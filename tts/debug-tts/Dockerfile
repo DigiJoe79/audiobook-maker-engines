@@ -5,7 +5,7 @@
 # No GPU, no ML frameworks - pure Python audio generation.
 #
 # ==============================================================================
-# Build (from audiobook-maker-engines repo root):
+# Build (from backend/engines directory):
 # ==============================================================================
 #   docker build -t audiobook-maker/debug-tts:latest -f tts/debug-tts/Dockerfile .
 #
@@ -46,6 +46,9 @@ COPY base_tts_server.py ./
 # Copy Debug TTS engine files
 COPY tts/debug-tts/server.py ./
 COPY tts/debug-tts/engine.yaml ./
+
+# Create directories for volumes (samples for speaker samples - not used by debug-tts but for API consistency)
+RUN mkdir -p /app/samples
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1
