@@ -96,6 +96,7 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir \
     "fastapi>=0.115.0,<1.0.0" \
     "uvicorn>=0.32.0,<1.0.0" \
+    "python-multipart>=0.0.9,<1.0.0" \
     "pydantic>=2.10.0,<3.0.0"
 
 # Step 7: Utilities
