@@ -1,0 +1,81 @@
+name: Build Docker Images
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # Manual trigger for testing
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/audiobook-maker-engines
+
+jobs:
+  # ============================================================
+  # Debug TTS (Multi-Arch CPU)
+  # ============================================================
+  build-debug-tts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/debug-tts
+          tags: |
+            type=raw,value=latest
+            type=ref,event=tag
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./tts/debug-tts/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================
+  # Upload catalog.json as Release Asset
+  # ============================================================
+  upload-catalog:
+    needs: [build-debug-tts]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update catalog timestamp
+        run: |
+          # Update lastUpdated field with current timestamp
+          jq --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.lastUpdated = $ts' catalog.json > catalog.tmp.json
+          mv catalog.tmp.json catalog.json
+
+      - name: Upload catalog to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: catalog.json
