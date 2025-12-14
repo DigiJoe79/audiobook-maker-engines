@@ -2,6 +2,8 @@
 
 Docker images for [Audiobook Maker](https://github.com/DigiJoe79/audiobook-maker) TTS/STT/Text/Audio engines.
 
+> **Note:** For issues, feature requests, and discussions please use the [main repository](https://github.com/DigiJoe79/audiobook-maker/issues). This repo only contains the engine Docker images.
+
 ## Available Engines
 
 | Engine | Type | GPU | Platforms | Description |
