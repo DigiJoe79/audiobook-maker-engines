@@ -16,8 +16,9 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
+      shared-base: ${{ steps.filter.outputs.shared-base }}
       debug-tts: ${{ steps.filter.outputs.debug-tts }}
-      # Add more engines here as they are added
+      chatterbox: ${{ steps.filter.outputs.chatterbox }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,11 +28,15 @@ jobs:
         id: filter
         with:
           filters: |
+            shared-base:
+              - 'base_server.py'
+              - 'base_tts_server.py'
+              - 'base_text_server.py'
+              - 'base_quality_server.py'
             debug-tts:
               - 'tts/debug-tts/**'
-            # Add more engines here:
-            # xtts:
-            #   - 'tts/xtts/**'
+            chatterbox:
+              - 'tts/chatterbox/**'
 
   # ============================================================
   # Debug TTS (Multi-Arch CPU)
@@ -40,6 +45,7 @@ jobs:
     needs: detect-changes
     if: |
       needs.detect-changes.outputs.debug-tts == 'true' ||
+      needs.detect-changes.outputs.shared-base == 'true' ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
@@ -84,10 +90,58 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ============================================================
+  # Chatterbox (GPU - amd64 only)
+  # ============================================================
+  build-chatterbox:
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.chatterbox == 'true' ||
+      needs.detect-changes.outputs.shared-base == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/chatterbox
+          tags: |
+            type=raw,value=latest
+            type=ref,event=tag
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./tts/chatterbox/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================
   # Generate and Upload catalog.json
   # ============================================================
   upload-catalog:
-    needs: [build-debug-tts]
+    needs: [build-debug-tts, build-chatterbox]
     if: |
       always() &&
       github.event_name == 'release' &&
