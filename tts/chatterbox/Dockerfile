@@ -1,6 +1,7 @@
 # Chatterbox Multilingual TTS Engine Docker Image
 #
-# Multi-stage build with model downloaded from HuggingFace (~1.5GB)
+# Multi-stage build: dependencies in builder, model downloaded in runtime stage
+# to avoid duplicate disk usage during build (~1.5GB model from HuggingFace)
 # Supports GPU via NVIDIA Container Toolkit
 #
 # ==============================================================================
@@ -105,15 +106,6 @@ RUN pip install --no-cache-dir \
     "huggingface_hub>=0.20.0"
 
 # ==============================================================================
-# Step 8: Download model from HuggingFace Hub
-# ==============================================================================
-# Download Chatterbox model from HuggingFace (public model, no token needed)
-# The model contains CUDA tensors but can be downloaded without GPU
-# It will be loaded at runtime when CUDA is available
-RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('ResembleAI/chatterbox', local_dir_use_symlinks=False)" \
-    && echo "Chatterbox model downloaded successfully"
-
-# ==============================================================================
 # Stage 2: Runtime - Minimal image with only runtime dependencies
 # ==============================================================================
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS runtime
@@ -137,8 +129,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy downloaded model from builder (HuggingFace cache)
-COPY --from=builder /root/.cache/huggingface /root/.cache/huggingface
+# Download model from HuggingFace Hub (directly in runtime stage to save disk space during build)
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('ResembleAI/chatterbox', local_dir_use_symlinks=False)" \
+    && echo "Chatterbox model downloaded successfully"
 
 # Set working directory
 WORKDIR /app
