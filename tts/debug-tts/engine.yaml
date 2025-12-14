@@ -1,5 +1,18 @@
 name: "debug-tts"
 display_name: "Debug TTS"
+description: "Minimal test engine - generates sine wave tones instead of speech. Useful for testing the pipeline without GPU."
+
+# Upstream/License Info
+upstream:
+  name: "Audiobook Maker"
+  url: "https://github.com/DigiJoe79/audiobook-maker"
+  license: "MIT"
+
+# Docker Variants
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64", "linux/arm64"]
+    requires_gpu: false
 
 # Default enabled state - useful for testing
 enabled: true
@@ -18,6 +31,9 @@ models:
   - name: "default"
     display_name: "Default (Sine Wave)"
     path: "builtin"  # No external model files needed
+
+# Default model to use
+default_model: "default"
 
 # Capabilities
 capabilities:

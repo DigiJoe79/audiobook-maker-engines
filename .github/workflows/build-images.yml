@@ -11,9 +11,37 @@ env:
 
 jobs:
   # ============================================================
+  # Detect which engines changed (for selective builds)
+  # ============================================================
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      debug-tts: ${{ steps.filter.outputs.debug-tts }}
+      # Add more engines here as they are added
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            debug-tts:
+              - 'tts/debug-tts/**'
+            # Add more engines here:
+            # xtts:
+            #   - 'tts/xtts/**'
+
+  # ============================================================
   # Debug TTS (Multi-Arch CPU)
   # ============================================================
   build-debug-tts:
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.debug-tts == 'true' ||
+      github.event_name == 'release' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -57,23 +85,31 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ============================================================
-  # Upload catalog.json as Release Asset
+  # Generate and Upload catalog.json
   # ============================================================
   upload-catalog:
     needs: [build-debug-tts]
+    if: |
+      always() &&
+      github.event_name == 'release' &&
+      !contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
-    if: github.event_name == 'release'
     permissions:
       contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Update catalog timestamp
-        run: |
-          # Update lastUpdated field with current timestamp
-          jq --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.lastUpdated = $ts' catalog.json > catalog.tmp.json
-          mv catalog.tmp.json catalog.json
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Generate catalog.json
+        run: python scripts/generate_catalog.py
 
       - name: Upload catalog to release
         uses: softprops/action-gh-release@v2

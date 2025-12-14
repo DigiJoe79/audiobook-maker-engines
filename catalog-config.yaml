@@ -1,0 +1,11 @@
+# Catalog Configuration
+# This file contains header information for the generated catalog.json
+
+# Catalog format version
+catalog_version: "1.0"
+
+# Minimum app version required to use this catalog
+min_app_version: "1.1.0"
+
+# Docker registry base URL
+registry: "ghcr.io/digijoe79/audiobook-maker-engines"
