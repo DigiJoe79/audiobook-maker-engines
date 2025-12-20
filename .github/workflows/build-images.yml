@@ -47,9 +47,10 @@ jobs:
   build-debug-tts:
     needs: detect-changes
     if: |
+      github.event_name == 'release' ||
+      github.event_name == 'workflow_dispatch' ||
       needs.detect-changes.outputs.debug-tts == 'true' ||
-      needs.detect-changes.outputs.shared-base == 'true' ||
-      github.event_name == 'workflow_dispatch'
+      needs.detect-changes.outputs.shared-base == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -98,9 +99,10 @@ jobs:
   build-chatterbox:
     needs: detect-changes
     if: |
+      github.event_name == 'release' ||
+      github.event_name == 'workflow_dispatch' ||
       needs.detect-changes.outputs.chatterbox == 'true' ||
-      needs.detect-changes.outputs.shared-base == 'true' ||
-      github.event_name == 'workflow_dispatch'
+      needs.detect-changes.outputs.shared-base == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -157,9 +159,10 @@ jobs:
   build-silero-vad:
     needs: detect-changes
     if: |
+      github.event_name == 'release' ||
+      github.event_name == 'workflow_dispatch' ||
       needs.detect-changes.outputs.silero-vad == 'true' ||
-      needs.detect-changes.outputs.shared-base == 'true' ||
-      github.event_name == 'workflow_dispatch'
+      needs.detect-changes.outputs.shared-base == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -1,7 +1,7 @@
 catalog_version: '1.0'
 min_app_version: 1.1.0
 registry: ghcr.io/digijoe79/audiobook-maker-engines
-last_updated: '2025-12-20T11:12:02Z'
+last_updated: '2025-12-20T17:43:50Z'
 engines:
 - name: chatterbox
   engine_type: tts
@@ -87,7 +87,7 @@ engines:
   - name: multilingual
     display_name: Multilingual (Pretrained)
     path: pretrained
-  default_model: ''
+  default_model: multilingual
 - name: debug-tts
   engine_type: tts
   display_name: Debug TTS
@@ -139,3 +139,102 @@ engines:
     display_name: Default (Sine Wave)
     path: builtin
   default_model: default
+- name: silero-vad
+  engine_type: audio
+  display_name: Silero VAD Audio Analysis
+  description: 'Audio quality analysis using Silero Voice Activity Detection.
+
+    Detects speech/silence ratio, clipping, and volume issues.
+
+    '
+  upstream:
+    name: Silero VAD
+    url: https://github.com/snakers4/silero-vad
+    license: MIT
+  variants:
+  - tag: latest
+    platforms:
+    - linux/amd64
+    - linux/arm64
+    requires_gpu: false
+  supported_languages: []
+  constraints: {}
+  capabilities:
+    supports_model_hotswap: false
+  parameters:
+    speech_ratio_ideal_min:
+      type: int
+      label: settings.audio.sileroVad.speechRatioIdealMin
+      description: settings.audio.sileroVad.speechRatioIdealMinDesc
+      default: 75
+      min: 0
+      max: 100
+      step: 1
+      category: speechRatio
+    speech_ratio_ideal_max:
+      type: int
+      label: settings.audio.sileroVad.speechRatioIdealMax
+      description: settings.audio.sileroVad.speechRatioIdealMaxDesc
+      default: 90
+      min: 0
+      max: 100
+      step: 1
+      category: speechRatio
+    speech_ratio_warning_min:
+      type: int
+      label: settings.audio.sileroVad.speechRatioWarningMin
+      description: settings.audio.sileroVad.speechRatioWarningMinDesc
+      default: 65
+      min: 0
+      max: 100
+      step: 1
+      category: speechRatio
+    speech_ratio_warning_max:
+      type: int
+      label: settings.audio.sileroVad.speechRatioWarningMax
+      description: settings.audio.sileroVad.speechRatioWarningMaxDesc
+      default: 93
+      min: 0
+      max: 100
+      step: 1
+      category: speechRatio
+    max_silence_duration_warning:
+      type: int
+      label: settings.audio.sileroVad.maxSilenceWarning
+      description: settings.audio.sileroVad.maxSilenceWarningDesc
+      default: 2500
+      min: 0
+      max: 10000
+      step: 100
+      category: silence
+    max_silence_duration_critical:
+      type: int
+      label: settings.audio.sileroVad.maxSilenceCritical
+      description: settings.audio.sileroVad.maxSilenceCriticalDesc
+      default: 3750
+      min: 0
+      max: 10000
+      step: 100
+      category: silence
+    max_clipping_peak:
+      type: float
+      label: settings.audio.sileroVad.maxClippingPeak
+      description: settings.audio.sileroVad.maxClippingPeakDesc
+      default: 0.0
+      min: -10.0
+      max: 3.0
+      step: 0.1
+      category: clipping
+    min_average_volume:
+      type: float
+      label: settings.audio.sileroVad.minAverageVolume
+      description: settings.audio.sileroVad.minAverageVolumeDesc
+      default: -40.0
+      min: -60.0
+      max: 0.0
+      step: 1.0
+      category: volume
+  models:
+  - name: silero-vad
+    display_name: Silero VAD
+  default_model: silero-vad

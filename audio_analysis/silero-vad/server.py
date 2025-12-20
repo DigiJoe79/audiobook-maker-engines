@@ -39,12 +39,20 @@ from loguru import logger  # noqa: E402
 # Lazy imports (loaded in methods to speed up startup)
 import numpy as np  # noqa: E402
 
-# Silero-VAD package version (for display)
-try:
-    import silero_vad
-    SILERO_VAD_VERSION = silero_vad.__version__
-except (ImportError, AttributeError):
-    SILERO_VAD_VERSION = "unknown"
+# Silero-VAD package version (lazy loaded to avoid slow PyTorch import at startup)
+_SILERO_VAD_VERSION = None
+
+
+def _get_silero_vad_version() -> str:
+    """Get silero-vad version lazily to avoid slow startup."""
+    global _SILERO_VAD_VERSION
+    if _SILERO_VAD_VERSION is None:
+        try:
+            import silero_vad
+            _SILERO_VAD_VERSION = silero_vad.__version__
+        except (ImportError, AttributeError):
+            _SILERO_VAD_VERSION = "unknown"
+    return _SILERO_VAD_VERSION
 
 
 # ============= Silero-VAD Engine Server =============
@@ -68,20 +76,20 @@ class SileroVADEngineServer(BaseQualityServer):
         # Silero VAD model (lazy loaded)
         self.vad_model = None
 
-        logger.debug(f"[silero-vad] Audio analysis engine initialized (package v{SILERO_VAD_VERSION})")
+        logger.debug(f"[silero-vad] Audio analysis engine initialized")
 
     def _load_vad_model(self):
         """Load Silero VAD model from pip package"""
         if self.vad_model is None:
             try:
-                logger.debug(f"[silero-vad] Loading Silero VAD model v{SILERO_VAD_VERSION}...")
+                logger.debug(f"[silero-vad] Loading Silero VAD model v{_get_silero_vad_version()}...")
                 from silero_vad import load_silero_vad
 
                 # Load model from pip package (no torch.hub download needed)
                 # Model runs on CPU - lightweight enough for fast inference
                 self.vad_model = load_silero_vad(onnx=False)
 
-                logger.debug(f"[silero-vad] Silero VAD v{SILERO_VAD_VERSION} loaded successfully")
+                logger.debug(f"[silero-vad] Silero VAD v{_get_silero_vad_version()} loaded successfully")
             except Exception as e:
                 logger.warning(f"[silero-vad] Failed to load Silero VAD model: {e}")
                 self.vad_model = None
@@ -387,7 +395,7 @@ class SileroVADEngineServer(BaseQualityServer):
         return [
             ModelInfo(
                 name="silero-vad",
-                display_name=f"Silero VAD v{SILERO_VAD_VERSION}",
+                display_name=f"Silero VAD v{_get_silero_vad_version()}",
                 languages=[]  # Voice activity detection is language-independent
             )
         ]
@@ -423,7 +431,7 @@ class SileroVADEngineServer(BaseQualityServer):
 
     def get_package_version(self) -> str:
         """Return silero-vad package version for health endpoint"""
-        return SILERO_VAD_VERSION
+        return _get_silero_vad_version()
 
 
 # ============= Main Entry Point =============

@@ -12,8 +12,13 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Engine types to scan
-ENGINE_TYPES = ["tts", "stt", "text", "audio"]
+# Engine type directories to scan (maps engine_type to directory name)
+ENGINE_TYPE_DIRS = {
+    "tts": "tts",
+    "stt": "stt",
+    "text": "text_processing",
+    "audio": "audio_analysis",
+}
 
 
 def load_catalog_config(repo_root: Path) -> dict:
@@ -28,10 +33,16 @@ def load_catalog_config(repo_root: Path) -> dict:
 
 
 def find_engines(repo_root: Path) -> list[tuple[str, Path]]:
-    """Find all engine.yaml files and return (type, path) tuples."""
+    """
+    Find all engine.yaml files and return (type, path) tuples.
+
+    Only includes engines that:
+    - Have a Dockerfile (are dockerized)
+    - Are not _template directories
+    """
     engines = []
-    for engine_type in ENGINE_TYPES:
-        type_dir = repo_root / engine_type
+    for engine_type, dir_name in ENGINE_TYPE_DIRS.items():
+        type_dir = repo_root / dir_name
         if not type_dir.exists():
             continue
 
@@ -39,9 +50,18 @@ def find_engines(repo_root: Path) -> list[tuple[str, Path]]:
             if not engine_dir.is_dir():
                 continue
 
+            # Skip template directories
+            if engine_dir.name.startswith("_"):
+                continue
+
             yaml_path = engine_dir / "engine.yaml"
-            if yaml_path.exists():
+            dockerfile_path = engine_dir / "Dockerfile"
+
+            # Only include engines with both engine.yaml AND Dockerfile
+            if yaml_path.exists() and dockerfile_path.exists():
                 engines.append((engine_type, yaml_path))
+            elif yaml_path.exists():
+                print(f"  - Skipping {engine_dir.name}: no Dockerfile")
 
     return engines
 

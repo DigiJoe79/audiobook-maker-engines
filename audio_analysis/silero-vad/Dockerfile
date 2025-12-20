@@ -83,8 +83,9 @@ EXPOSE 8769
 
 # -----------------------------------------------------------------------------
 # Health Check
+# Note: PyTorch import is slow, so we need a longer start-period than lightweight engines
 # -----------------------------------------------------------------------------
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:${PORT}/health')" || exit 1
 
 # -----------------------------------------------------------------------------
