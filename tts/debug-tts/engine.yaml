@@ -1,56 +1,31 @@
+schema_version: 2
+
+# IDENTITY
 name: "debug-tts"
 display_name: "Debug TTS"
+engine_type: "tts"
 description: "Minimal test engine - generates sine wave tones instead of speech. Useful for testing the pipeline without GPU."
 
-# Upstream/License Info
+# DISTRIBUTION
 upstream:
   name: "Audiobook Maker"
   url: "https://github.com/DigiJoe79/audiobook-maker"
   license: "MIT"
 
-# Docker Variants
 variants:
   - tag: "latest"
     platforms: ["linux/amd64", "linux/arm64"]
     requires_gpu: false
 
-# Default enabled state - useful for testing
-enabled: true
-
-# No GPU required - pure Python sine wave generation
-requires_gpu: false
-
-# Python version requirement
-python_version: "3.10"
-
-# Path to virtual environment (relative to this file)
-venv_path: "./venv"
-
-# Available models
+# MODELS
 models:
   - name: "default"
     display_name: "Default (Sine Wave)"
     path: "builtin"  # No external model files needed
 
-# Default model to use
 default_model: "default"
 
-# Capabilities
-capabilities:
-  supports_model_hotswap: true   # Instant "loading" (no actual model)
-  supports_speaker_cloning: false  # Ignores speaker samples
-  supports_streaming: false
-
-# Constraints
-constraints:
-  min_text_length: 1
-  max_text_length: 10000  # Very permissive for testing
-  sample_rate: 24000      # Standard TTS sample rate
-  audio_format: "wav"
-  supports_streaming: false
-  requires_punctuation: false
-
-# Supported languages (all major languages - affects tone slightly)
+# LANGUAGES (all major languages - affects tone slightly)
 supported_languages:
   - de  # German
   - en  # English
@@ -58,26 +33,40 @@ supported_languages:
   - es  # Spanish
   - it  # Italian
 
-# Configuration
-config:
-  # Parameter schema for Settings dialog
-  parameter_schema:
-    pitch:
-      type: "float"
-      label: "settings.tts.debugTts.pitch"
-      description: "settings.tts.debugTts.pitchDesc"
-      default: 1.0
-      min: 0.5
-      max: 2.0
-      step: 0.1
-      readonly: false
+# CONSTRAINTS
+constraints:
+  max_text_length: 10000  # Very permissive for testing
 
-    speed:
-      type: "float"
-      label: "settings.tts.debugTts.speed"
-      description: "settings.tts.debugTts.speedDesc"
-      default: 1.0
-      min: 0.5
-      max: 2.0
-      step: 0.1
-      readonly: false
+# CAPABILITIES
+capabilities:
+  supports_model_hotswap: true   # Instant "loading" (no actual model)
+  supports_speaker_cloning: false  # Ignores speaker samples
+  supports_streaming: false
+
+# UI PARAMETERS
+parameters:
+  pitch:
+    type: "float"
+    label: "settings.tts.debugTts.pitch"
+    description: "settings.tts.debugTts.pitchDesc"
+    default: 1.0
+    min: 0.5
+    max: 2.0
+    step: 0.1
+    readonly: false
+
+  speed:
+    type: "float"
+    label: "settings.tts.debugTts.speed"
+    description: "settings.tts.debugTts.speedDesc"
+    default: 1.0
+    min: 0.5
+    max: 2.0
+    step: 0.1
+    readonly: false
+
+# INSTALLATION (for subprocess engines - optional for Docker-only)
+installation:
+  python_version: "3.10"
+  venv_path: "./venv"
+  requires_gpu: false

@@ -1,0 +1,44 @@
+# Virtual environments (each engine has its own)
+**/venv/
+**/.venv/
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.Python
+
+# Models (mounted as volumes, not baked in)
+**/models/
+!tts/debug-tts/models/
+
+# IDE
+**/.idea/
+**/.vscode/
+
+# OS
+**/.DS_Store
+**/Thumbs.db
+
+# Logs
+**/*.log
+
+# Test files
+**/tests/
+**/*_test.py
+**/test_*.py
+**/conftest.py
+
+# Setup scripts (not needed in container)
+**/setup.bat
+**/setup.sh
+**/install_models.py
+
+# Documentation
+**/*.md
+**/README*
+
+# Git
+**/.git/
+**/.gitignore

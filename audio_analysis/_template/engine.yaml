@@ -1,0 +1,76 @@
+schema_version: 2
+
+# =============================================================================
+# IDENTITY (required)
+# =============================================================================
+name: "template-audio"                  # TODO: Change to your engine name (lowercase, hyphens)
+display_name: "Template Audio Analyzer" # TODO: Human-readable name
+engine_type: "audio"
+description: |
+  Template audio analysis engine for creating new audio engines.
+  TODO: Add description of your engine's capabilities.
+
+# =============================================================================
+# UPSTREAM (credits & license attribution)
+# =============================================================================
+upstream:
+  name: "Your Upstream Project"         # TODO: Name of the original project
+  url: "https://github.com/..."         # TODO: URL to upstream repository
+  license: "MIT"                        # TODO: License (MIT, Apache-2.0, etc.)
+
+# =============================================================================
+# DISTRIBUTION (Docker variants)
+# =============================================================================
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64", "linux/arm64"]
+    requires_gpu: false
+
+# =============================================================================
+# MODELS
+# =============================================================================
+models:
+  - name: "default"
+    display_name: "Default Configuration"
+
+default_model: "default"
+
+# =============================================================================
+# CAPABILITIES
+# =============================================================================
+capabilities:
+  supports_model_hotswap: false         # Can switch models without restart
+
+# =============================================================================
+# UI PARAMETERS
+# =============================================================================
+parameters:
+  speech_ratio_ideal_min:
+    type: "int"
+    label: "settings.audio.template.speechRatioIdealMin"
+    description: "settings.audio.template.speechRatioIdealMinDesc"
+    default: 75
+    min: 0
+    max: 100
+    step: 1
+    readonly: false
+    category: "speechRatio"
+  speech_ratio_ideal_max:
+    type: "int"
+    label: "settings.audio.template.speechRatioIdealMax"
+    description: "settings.audio.template.speechRatioIdealMaxDesc"
+    default: 90
+    min: 0
+    max: 100
+    step: 1
+    readonly: false
+    category: "speechRatio"
+  # TODO: Add your engine-specific parameters
+
+# =============================================================================
+# INSTALLATION (for subprocess engines)
+# =============================================================================
+installation:
+  python_version: "3.10"
+  venv_path: "./venv"
+  requires_gpu: false

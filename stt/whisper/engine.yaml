@@ -1,0 +1,83 @@
+schema_version: 2
+
+# IDENTITY
+name: "whisper"
+display_name: "OpenAI Whisper"
+engine_type: "stt"
+
+# UPSTREAM
+upstream:
+  name: "OpenAI Whisper"
+  url: "https://github.com/openai/whisper"
+  license: "MIT"
+
+# MODELS
+models:
+  - name: "tiny"
+    display_name: "Tiny (39 MB)"
+    size_mb: 39
+    speed: "~10x realtime"
+    accuracy: "lowest"
+  - name: "base"
+    display_name: "Base (74 MB)"
+    size_mb: 74
+    speed: "~7x realtime"
+    accuracy: "basic"
+  - name: "small"
+    display_name: "Small (244 MB)"
+    size_mb: 244
+    speed: "~4x realtime"
+    accuracy: "good"
+  - name: "medium"
+    display_name: "Medium (769 MB)"
+    size_mb: 769
+    speed: "~2x realtime"
+    accuracy: "better"
+  - name: "large"
+    display_name: "Large (1550 MB)"
+    size_mb: 1550
+    speed: "~1x realtime"
+    accuracy: "best"
+
+default_model: "base"
+
+# LANGUAGES
+supported_languages:
+  - en
+  - de
+  - fr
+  - es
+  - it
+  - pt
+  - nl
+  - pl
+  - ru
+  - ja
+  - zh
+  - ko
+
+# CAPABILITIES
+capabilities:
+  supports_model_hotswap: true
+
+# UI PARAMETERS
+parameters:
+  confidence_threshold:
+    type: "float"
+    label: "settings.stt.whisper.confidenceThreshold"
+    description: "settings.stt.whisper.confidenceThresholdDesc"
+    default: 0.80
+    min: 0.5
+    max: 1.0
+    step: 0.05
+    category: "analysis"
+
+# ENGINE-SPECIFIC CONFIG
+engine_config:
+  device: "auto"  # auto, cpu, cuda
+  compute_type: "default"  # default, int8, float16
+
+# INSTALLATION (for subprocess engines)
+installation:
+  python_version: "3.12"
+  venv_path: "./venv"

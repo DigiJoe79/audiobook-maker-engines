@@ -1,0 +1,82 @@
+schema_version: 2
+
+# =============================================================================
+# IDENTITY (required)
+# =============================================================================
+name: "template-stt"                    # TODO: Change to your engine name (lowercase, hyphens)
+display_name: "Template STT"            # TODO: Human-readable name
+engine_type: "stt"
+description: |
+  Template STT engine for creating new speech-to-text engines.
+  TODO: Add description of your engine's capabilities.
+
+# =============================================================================
+# UPSTREAM (credits & license attribution)
+# =============================================================================
+upstream:
+  name: "Your Upstream Project"         # TODO: Name of the original project
+  url: "https://github.com/..."         # TODO: URL to upstream repository
+  license: "MIT"                        # TODO: License (MIT, Apache-2.0, etc.)
+
+# =============================================================================
+# DISTRIBUTION (Docker variants)
+# =============================================================================
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64", "linux/arm64"]
+    requires_gpu: false                 # TODO: Set to true for GPU engines
+
+# =============================================================================
+# MODELS
+# =============================================================================
+models:
+  - name: "base"
+    display_name: "Base Model"
+    # TODO: Add model-specific metadata
+    # size_mb: 150
+  - name: "large"
+    display_name: "Large Model"
+    # size_mb: 1500
+
+default_model: "base"
+
+# =============================================================================
+# LANGUAGES
+# =============================================================================
+supported_languages:
+  - en
+  - de
+  - fr
+  - es
+  - it
+  # TODO: Add supported languages
+
+# =============================================================================
+# CAPABILITIES
+# =============================================================================
+capabilities:
+  supports_model_hotswap: true          # Can switch models without restart
+
+# =============================================================================
+# UI PARAMETERS
+# =============================================================================
+parameters:
+  confidence_threshold:
+    type: "float"
+    label: "settings.stt.template.confidenceThreshold"
+    description: "settings.stt.template.confidenceThresholdDesc"
+    default: 0.80
+    min: 0.5
+    max: 1.0
+    step: 0.05
+    readonly: false
+    category: "analysis"
+  # TODO: Add your engine-specific parameters
+
+# =============================================================================
+# INSTALLATION (for subprocess engines)
+# =============================================================================
+installation:
+  python_version: "3.10"
+  venv_path: "./venv"
+  requires_gpu: false                   # TODO: Set to true for GPU engines

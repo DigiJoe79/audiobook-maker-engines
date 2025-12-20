@@ -1,0 +1,91 @@
+# =============================================================================
+# Template Text Processing Engine Dockerfile
+# =============================================================================
+#
+# Copy this file to your engine directory and rename to "Dockerfile".
+# Replace all TODO comments with your engine-specific configuration.
+#
+# Build (from repo root):
+#   docker build -t audiobook-maker/your-engine:latest -f text_processing/your-engine/Dockerfile .
+#
+# Run:
+#   docker run -d -p 8768:8768 audiobook-maker/your-engine:latest
+#
+# IMPORTANT: Add .dockerignore exception for baked-in models:
+#   !text_processing/your-engine/models/
+#
+# =============================================================================
+
+FROM python:3.10-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /app
+
+# -----------------------------------------------------------------------------
+# System Dependencies (if needed)
+# -----------------------------------------------------------------------------
+# TODO: Add system dependencies if required
+
+# -----------------------------------------------------------------------------
+# Python Environment
+# -----------------------------------------------------------------------------
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# -----------------------------------------------------------------------------
+# Python Dependencies
+# -----------------------------------------------------------------------------
+# TODO: Change path to your engine
+COPY text_processing/your-engine/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# -----------------------------------------------------------------------------
+# Base Server Files
+# -----------------------------------------------------------------------------
+COPY base_server.py ./
+COPY base_text_server.py ./
+
+# -----------------------------------------------------------------------------
+# Engine Files
+# -----------------------------------------------------------------------------
+# TODO: Change path to your engine
+COPY text_processing/your-engine/server.py ./
+COPY text_processing/your-engine/engine.yaml ./
+
+# -----------------------------------------------------------------------------
+# Baked-in Models (optional)
+# -----------------------------------------------------------------------------
+# TODO: Uncomment if you have baked-in models
+# COPY text_processing/your-engine/models/ ./models/
+
+# -----------------------------------------------------------------------------
+# Entrypoint and Directories
+# -----------------------------------------------------------------------------
+COPY scripts/docker-entrypoint.sh ./
+RUN chmod +x /app/docker-entrypoint.sh
+
+RUN mkdir -p /app/models /app/external_models
+
+# -----------------------------------------------------------------------------
+# Environment
+# -----------------------------------------------------------------------------
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PORT=8768
+
+EXPOSE 8768
+
+# -----------------------------------------------------------------------------
+# Health Check
+# -----------------------------------------------------------------------------
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:${PORT}/health')" || exit 1
+
+# -----------------------------------------------------------------------------
+# Entrypoint
+# -----------------------------------------------------------------------------
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["sh", "-c", "python server.py --port ${PORT:-8768} --host 0.0.0.0"]

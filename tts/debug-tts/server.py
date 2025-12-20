@@ -47,12 +47,34 @@ class DebugTTSServer(BaseTTSServer):
 
     def load_model(self, model_name: str) -> None:
         """
-        Simulate model loading (instant - no actual model).
+        Simulate model loading with on-demand download behavior.
+
+        If model doesn't exist, creates it in external_models (simulating download).
+        This demonstrates the on-demand download pattern (like Whisper).
 
         Args:
-            model_name: Model identifier (ignored - always succeeds)
+            model_name: Model identifier
         """
         logger.info(f"[debug-tts] Loading model: {model_name}")
+
+        model_path = self.models_dir / model_name
+
+        # Check if model exists (baked-in or symlinked from external)
+        if not model_path.exists():
+            logger.info(f"[debug-tts] Model '{model_name}' not found, downloading...")
+
+            # Simulate download to external_models (for persistence)
+            external_path = self.external_models_dir / model_name
+            external_path.mkdir(parents=True, exist_ok=True)
+
+            # Create dummy model file
+            model_file = external_path / "model.json"
+            model_file.write_text(f'{{\n  "name": "{model_name}",\n  "type": "sine_wave",\n  "version": "1.0.0",\n  "description": "Auto-downloaded debug model"\n}}\n')
+
+            # Create symlink from models/ to external_models/
+            model_path.symlink_to(external_path)
+
+            logger.info(f"[debug-tts] Model '{model_name}' downloaded to {external_path}")
 
         # Simulate successful model load
         self.current_model = model_name
@@ -183,22 +205,31 @@ class DebugTTSServer(BaseTTSServer):
 
     def get_available_models(self) -> List[ModelInfo]:
         """
-        Return available debug models.
+        Return available debug models by scanning models directory.
 
         Returns:
             List of ModelInfo objects
         """
-        return [
-            ModelInfo(
-                name="default",
-                display_name="Default (Sine Wave)",
-                languages=["de", "en", "fr", "es", "it"],
-                fields=[
-                    ModelField(key="type", value="sine_wave", field_type="string"),
-                    ModelField(key="size_mb", value=0, field_type="number"),
-                ]
-            ),
-        ]
+        models = []
+
+        # Scan models directory for available models
+        if self.models_dir.exists():
+            for model_path in sorted(self.models_dir.iterdir()):
+                if model_path.is_dir() or model_path.is_symlink():
+                    model_name = model_path.name
+                    models.append(
+                        ModelInfo(
+                            name=model_name,
+                            display_name=f"{model_name.title()} (Sine Wave)",
+                            languages=["de", "en", "fr", "es", "it"],
+                            fields=[
+                                ModelField(key="type", value="sine_wave", field_type="string"),
+                                ModelField(key="size_mb", value=0, field_type="number"),
+                            ]
+                        )
+                    )
+
+        return models
 
     def get_package_version(self) -> str:
         """Return engine version."""

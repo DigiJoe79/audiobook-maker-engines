@@ -1,0 +1,101 @@
+# =============================================================================
+# Template STT Engine Dockerfile
+# =============================================================================
+#
+# Copy this file to your engine directory and rename to "Dockerfile".
+# Replace all TODO comments with your engine-specific configuration.
+#
+# Build (from repo root):
+#   docker build -t audiobook-maker/your-engine:latest -f stt/your-engine/Dockerfile .
+#
+# Run:
+#   docker run -d -p 8767:8767 audiobook-maker/your-engine:latest
+#
+# IMPORTANT: Add .dockerignore exception for baked-in models:
+#   !stt/your-engine/models/
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# CPU Engine Base Image
+# -----------------------------------------------------------------------------
+FROM python:3.10-slim
+
+# For GPU engines, use instead:
+# FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+# RUN apt-get update && apt-get install -y python3.10 python3.10-venv python3-pip
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /app
+
+# -----------------------------------------------------------------------------
+# System Dependencies (if needed)
+# -----------------------------------------------------------------------------
+# TODO: Add system dependencies if required
+# RUN apt-get update && apt-get install -y \
+#     ffmpeg \
+#     && rm -rf /var/lib/apt/lists/*
+
+# -----------------------------------------------------------------------------
+# Python Environment
+# -----------------------------------------------------------------------------
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# -----------------------------------------------------------------------------
+# Python Dependencies
+# -----------------------------------------------------------------------------
+# TODO: Change path to your engine
+COPY stt/your-engine/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# -----------------------------------------------------------------------------
+# Base Server Files
+# -----------------------------------------------------------------------------
+COPY base_server.py ./
+COPY base_quality_server.py ./
+
+# -----------------------------------------------------------------------------
+# Engine Files
+# -----------------------------------------------------------------------------
+# TODO: Change path to your engine
+COPY stt/your-engine/server.py ./
+COPY stt/your-engine/engine.yaml ./
+
+# -----------------------------------------------------------------------------
+# Baked-in Models (optional)
+# -----------------------------------------------------------------------------
+# TODO: Uncomment if you have baked-in models
+# COPY stt/your-engine/models/ ./models/
+
+# -----------------------------------------------------------------------------
+# Entrypoint and Directories
+# -----------------------------------------------------------------------------
+COPY scripts/docker-entrypoint.sh ./
+RUN chmod +x /app/docker-entrypoint.sh
+
+RUN mkdir -p /app/models /app/external_models
+
+# -----------------------------------------------------------------------------
+# Environment
+# -----------------------------------------------------------------------------
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PORT=8767
+
+EXPOSE 8767
+
+# -----------------------------------------------------------------------------
+# Health Check
+# -----------------------------------------------------------------------------
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:${PORT}/health')" || exit 1
+
+# -----------------------------------------------------------------------------
+# Entrypoint
+# -----------------------------------------------------------------------------
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["sh", "-c", "python server.py --port ${PORT:-8767} --host 0.0.0.0"]

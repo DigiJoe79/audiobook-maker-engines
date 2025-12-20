@@ -1,0 +1,111 @@
+# =============================================================================
+# Template TTS Engine Dockerfile
+# =============================================================================
+#
+# Copy this file to your engine directory and rename to "Dockerfile".
+# Replace all TODO comments with your engine-specific configuration.
+#
+# Build (from repo root):
+#   docker build -t audiobook-maker/your-engine:latest -f tts/your-engine/Dockerfile .
+#
+# Run:
+#   docker run -d -p 8766:8766 audiobook-maker/your-engine:latest
+#
+# IMPORTANT: Add .dockerignore exception for baked-in models:
+#   !tts/your-engine/models/
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# CPU Engine Base Image
+# -----------------------------------------------------------------------------
+FROM python:3.10-slim
+
+# For GPU engines, use instead:
+# FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+# RUN apt-get update && apt-get install -y python3.10 python3.10-venv python3-pip
+
+# Prevent interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Set working directory
+WORKDIR /app
+
+# -----------------------------------------------------------------------------
+# System Dependencies (if needed)
+# -----------------------------------------------------------------------------
+# TODO: Add system dependencies if required
+# RUN apt-get update && apt-get install -y \
+#     libsndfile1 \
+#     ffmpeg \
+#     && rm -rf /var/lib/apt/lists/*
+
+# -----------------------------------------------------------------------------
+# Python Environment
+# -----------------------------------------------------------------------------
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# -----------------------------------------------------------------------------
+# Python Dependencies
+# -----------------------------------------------------------------------------
+# TODO: Change path to your engine
+COPY tts/your-engine/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# For GPU engines with PyTorch:
+# RUN pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# -----------------------------------------------------------------------------
+# Base Server Files
+# -----------------------------------------------------------------------------
+COPY base_server.py ./
+COPY base_tts_server.py ./
+
+# -----------------------------------------------------------------------------
+# Engine Files
+# -----------------------------------------------------------------------------
+# TODO: Change path to your engine
+COPY tts/your-engine/server.py ./
+COPY tts/your-engine/engine.yaml ./
+
+# -----------------------------------------------------------------------------
+# Baked-in Models (optional)
+# -----------------------------------------------------------------------------
+# TODO: Uncomment if you have baked-in models
+# IMPORTANT: Add .dockerignore exception first!
+# COPY tts/your-engine/models/ ./models/
+
+# -----------------------------------------------------------------------------
+# Entrypoint and Directories
+# -----------------------------------------------------------------------------
+COPY scripts/docker-entrypoint.sh ./
+RUN chmod +x /app/docker-entrypoint.sh
+
+# Create standard directories
+RUN mkdir -p /app/models /app/external_models /app/samples
+
+# -----------------------------------------------------------------------------
+# Environment
+# -----------------------------------------------------------------------------
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PORT=8766
+
+# Expose default TTS port
+EXPOSE 8766
+
+# -----------------------------------------------------------------------------
+# Health Check
+# -----------------------------------------------------------------------------
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:${PORT}/health')" || exit 1
+
+# -----------------------------------------------------------------------------
+# Entrypoint
+# -----------------------------------------------------------------------------
+# Entrypoint handles external model symlinks, then runs CMD
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["sh", "-c", "python server.py --port ${PORT:-8766} --host 0.0.0.0"]

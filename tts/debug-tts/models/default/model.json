@@ -1,0 +1,6 @@
+{
+  "name": "default",
+  "type": "sine_wave",
+  "version": "1.0.0",
+  "description": "Debug TTS dummy model - generates sine wave audio"
+}

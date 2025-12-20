@@ -1,53 +1,31 @@
+schema_version: 2
+
+# IDENTITY
 name: "chatterbox"
 display_name: "Chatterbox"
+engine_type: "tts"
 description: "Resemble AI - Chatterbox TTS, SoTA open-source TTS"
 
-# Upstream/License Info
+# DISTRIBUTION
 upstream:
   name: "Resemble AI - Chatterbox TTS"
   url: "https://github.com/resemble-ai/chatterbox"
   license: "MIT"
 
-# Docker Variants
 variants:
   - tag: "latest"
     platforms: ["linux/amd64"]  # arm64 not supported (requires CUDA)
     requires_gpu: true
 
-# Default enabled state (can be overridden in settings)
-enabled: false
-
-# GPU support - enable GPU passthrough when running in Docker
-requires_gpu: true
-
-# Python version requirement
-python_version: "3.11"  # Required: numpy 1.25.x not compatible with 3.12
-
-# Path to virtual environment (relative to this file)
-venv_path: "./venv"
-
-# Available models
+# MODELS
 models:
   - name: "multilingual"
     display_name: "Multilingual (Pretrained)"
     path: "pretrained"  # Loaded via from_pretrained()
 
-# Capabilities
-capabilities:
-  supports_model_hotswap: false  # Single pretrained model
-  supports_speaker_cloning: true  # Supports reference audio for voice cloning
-  supports_streaming: false
+default_model: "multilingual"
 
-# Constraints
-constraints:
-  min_text_length: 1
-  max_text_length: 300  # Recommended max for quality
-  sample_rate: 24000  # Chatterbox output sample rate
-  audio_format: "wav"
-  supports_streaming: false
-  requires_punctuation: false
-
-# Supported languages (23 languages)
+# LANGUAGES (23 languages)
 supported_languages:
   - ar  # Arabic
   - da  # Danish
@@ -73,47 +51,60 @@ supported_languages:
   - tr  # Turkish
   - zh  # Chinese
 
-# Configuration
-config:
-  # Parameter schema for Settings dialog
-  # These parameters are exposed in the UI and sent to the engine during generation
-  parameter_schema:
-    exaggeration:
-      type: "float"
-      label: "settings.tts.chatterbox.exaggeration"
-      description: "settings.tts.chatterbox.exaggerationDesc"
-      default: 0.5
-      min: 0.25
-      max: 2.0
-      step: 0.05
-      readonly: false
+# CONSTRAINTS
+constraints:
+  max_text_length: 300  # Recommended max for quality
 
-    temperature:
-      type: "float"
-      label: "settings.tts.chatterbox.temperature"
-      description: "settings.tts.chatterbox.temperatureDesc"
-      default: 0.8
-      min: 0.05
-      max: 5.0
-      step: 0.05
-      readonly: false
+# CAPABILITIES
+capabilities:
+  supports_model_hotswap: false  # Single pretrained model
+  supports_speaker_cloning: true  # Supports reference audio for voice cloning
+  supports_streaming: false
 
-    cfg_weight:
-      type: "float"
-      label: "settings.tts.chatterbox.cfgWeight"
-      description: "settings.tts.chatterbox.cfgWeightDesc"
-      default: 0.5
-      min: 0.2
-      max: 1.0
-      step: 0.05
-      readonly: false
+# UI PARAMETERS
+parameters:
+  exaggeration:
+    type: "float"
+    label: "settings.tts.chatterbox.exaggeration"
+    description: "settings.tts.chatterbox.exaggerationDesc"
+    default: 0.5
+    min: 0.25
+    max: 2.0
+    step: 0.05
+    readonly: false
 
-    seed:
-      type: "int"
-      label: "settings.tts.chatterbox.seed"
-      description: "settings.tts.chatterbox.seedDesc"
-      default: 0
-      min: 0
-      max: 2147483647
-      step: 1
-      readonly: false
+  temperature:
+    type: "float"
+    label: "settings.tts.chatterbox.temperature"
+    description: "settings.tts.chatterbox.temperatureDesc"
+    default: 0.8
+    min: 0.05
+    max: 5.0
+    step: 0.05
+    readonly: false
+
+  cfg_weight:
+    type: "float"
+    label: "settings.tts.chatterbox.cfgWeight"
+    description: "settings.tts.chatterbox.cfgWeightDesc"
+    default: 0.5
+    min: 0.2
+    max: 1.0
+    step: 0.05
+    readonly: false
+
+  seed:
+    type: "int"
+    label: "settings.tts.chatterbox.seed"
+    description: "settings.tts.chatterbox.seedDesc"
+    default: 0
+    min: 0
+    max: 2147483647
+    step: 1
+    readonly: false
+
+# INSTALLATION (for subprocess engines - optional for Docker-only)
+installation:
+  python_version: "3.11"  # Required: numpy 1.25.x not compatible with 3.12
+  venv_path: "./venv"
+  requires_gpu: true

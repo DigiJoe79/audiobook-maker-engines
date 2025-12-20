@@ -12,8 +12,8 @@ TTS engine servers inherit from this class and implement:
 - generate_audio(text, language, speaker_wav, parameters) -> bytes
 - unload_model()
 """
-from fastapi import Response, HTTPException, File, Form, UploadFile
-from typing import Dict, Any, Union, List
+from fastapi import Response, HTTPException, Request
+from typing import Dict, Any, Union, List, Optional
 from pathlib import Path
 from abc import abstractmethod
 from loguru import logger
@@ -29,7 +29,7 @@ class GenerateRequest(CamelCaseModel):
     text: str
     language: str  # Required (engine can ignore if not needed)
     tts_speaker_wav: Union[str, List[str]]  # Filename(s) in samples_dir
-    parameters: Dict[str, Any] = {}  # Engine-specific params
+    parameters: Optional[Dict[str, Any]] = None  # Engine-specific params (null/missing = use defaults)
 
 
 class SampleCheckRequest(CamelCaseModel):
@@ -59,15 +59,16 @@ class BaseTTSServer(BaseEngineServer):
     - unload_model() - Unload model and free resources
     """
 
-    def __init__(self, engine_name: str, display_name: str):
+    def __init__(self, engine_name: str, display_name: str, config_path: Optional[str] = None):
         """
         Initialize TTS engine server
 
         Args:
             engine_name: Engine identifier (e.g., "xtts", "chatterbox")
             display_name: Human-readable name (e.g., "XTTS v2", "Chatterbox TTS")
+            config_path: Optional path to engine.yaml (for /info endpoint)
         """
-        super().__init__(engine_name, display_name)
+        super().__init__(engine_name, display_name, config_path)
 
         # Determine samples directory based on environment
         # Docker: /app/samples (can be mounted for persistence)
@@ -103,6 +104,13 @@ class BaseTTSServer(BaseEngineServer):
                 if not self.model_loaded:
                     raise HTTPException(status_code=400, detail="Model not loaded")
 
+                # Clear previous error state on new request
+                self.error_message = None
+                self.status = "processing"
+
+                # Normalize parameters (null/None -> empty dict, engine applies its defaults)
+                parameters = request.parameters or {}
+
                 # Format speaker for logging (basename only, not full path)
                 if isinstance(request.tts_speaker_wav, str):
                     from pathlib import Path
@@ -112,21 +120,19 @@ class BaseTTSServer(BaseEngineServer):
 
                 # Log TTS parameters for debugging (without text content)
                 logger.debug(
-                    f"🎙️ [{self.engine_name}] Generating audio | "
+                    f"[{self.engine_name}] Generating audio | "
                     f"Model: {self.current_model} | "
                     f"Language: {request.language} | "
                     f"Speaker: {speaker_info} | "
-                    f"Parameters: {request.parameters}"
+                    f"Parameters: {parameters}"
                 )
-
-                self.status = "processing"
 
                 # Call engine-specific implementation
                 audio_bytes = self.generate_audio(
                     text=request.text,
                     language=request.language,
                     speaker_wav=request.tts_speaker_wav,
-                    parameters=request.parameters
+                    parameters=parameters
                 )
 
                 self.status = "ready"
@@ -135,6 +141,7 @@ class BaseTTSServer(BaseEngineServer):
                 return Response(content=audio_bytes, media_type="audio/wav")
 
             except HTTPException:
+                self.status = "ready"  # HTTP errors are client errors, server is still ready
                 raise
             except Exception as e:
                 self.status = "error"
@@ -161,16 +168,13 @@ class BaseTTSServer(BaseEngineServer):
             )
             return SampleCheckResponse(missing=missing)
 
-        @self.app.post("/samples/upload")
-        async def upload_sample(
-            sample_id: str = Form(...),
-            file: UploadFile = File(...)
-        ):
+        @self.app.post("/samples/upload/{sample_id}")
+        async def upload_sample(sample_id: str, request: Request):
             """Upload a speaker sample to the engine's samples directory"""
             dest = self.samples_dir / f"{sample_id}.wav"
 
-            # Read and write file content
-            content = await file.read()
+            # Read raw WAV bytes from request body
+            content = await request.body()
             with open(dest, "wb") as f:
                 f.write(content)
 

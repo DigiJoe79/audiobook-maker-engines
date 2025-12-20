@@ -190,7 +190,7 @@ class BaseQualityServer(BaseEngineServer):
     # Subclasses must set this to "stt" or "audio"
     engine_type: str = "quality"
 
-    def __init__(self, engine_name: str, display_name: str, engine_type: str):
+    def __init__(self, engine_name: str, display_name: str, engine_type: str, config_path: Optional[str] = None):
         """
         Initialize quality analysis engine server
 
@@ -198,8 +198,9 @@ class BaseQualityServer(BaseEngineServer):
             engine_name: Engine identifier (e.g., "whisper", "silero-vad")
             display_name: Human-readable name (e.g., "Whisper STT", "Silero VAD")
             engine_type: Either "stt" or "audio"
+            config_path: Optional path to engine.yaml (for /info endpoint)
         """
-        super().__init__(engine_name, display_name)
+        super().__init__(engine_name, display_name, config_path)
         self.engine_type = engine_type
 
         # Setup quality-specific routes

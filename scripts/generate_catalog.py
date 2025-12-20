@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Generate catalog.json from engine.yaml files.
+Generate catalog.yaml from engine.yaml files.
 
-Scans all {type}/{name}/engine.yaml files and builds catalog.json.
+Scans all {type}/{name}/engine.yaml files and builds catalog.yaml.
 Header info comes from catalog-config.yaml in the repo root.
+Uses snake_case throughout (same as engine.yaml).
 """
 
-import json
 import yaml
 import sys
 from datetime import datetime, timezone
@@ -47,47 +47,38 @@ def find_engines(repo_root: Path) -> list[tuple[str, Path]]:
 
 
 def transform_engine(engine_type: str, yaml_path: Path) -> dict:
-    """Transform engine.yaml to catalog entry format."""
+    """Transform engine.yaml to catalog entry format (preserving snake_case)."""
     with open(yaml_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
-    # Extract model names
-    models = config.get("models", [])
-    model_names = [m.get("name", "default") for m in models]
-
-    # Extract default parameters from parameter_schema
-    default_params = {}
-    param_schema = config.get("config", {}).get("parameter_schema", {})
-    for param_name, param_def in param_schema.items():
-        if "default" in param_def:
-            default_params[param_name] = param_def["default"]
-
-    # Build catalog entry
+    # Build catalog entry - all keys in snake_case
     entry = {
         "name": config.get("name"),
-        "type": engine_type,
-        "displayName": config.get("display_name", config.get("name")),
+        "engine_type": engine_type,
+        "display_name": config.get("display_name", config.get("name")),
         "description": config.get("description", ""),
         "upstream": config.get("upstream", {}),
         "variants": config.get("variants", []),
-        "supportedLanguages": config.get("supported_languages", []),
-        "models": model_names,
-        "defaultModel": config.get("default_model", model_names[0] if model_names else "default"),
-        "defaultParameters": default_params,
+        "supported_languages": config.get("supported_languages", []),
+        "constraints": config.get("constraints", {}),
+        "capabilities": config.get("capabilities", {}),
+        "parameters": config.get("parameters", {}),
+        "models": config.get("models", []),
+        "default_model": config.get("default_model", ""),
     }
 
     return entry
 
 
 def generate_catalog(repo_root: Path) -> dict:
-    """Generate complete catalog.json content."""
+    """Generate complete catalog.yaml content."""
     config = load_catalog_config(repo_root)
 
     catalog = {
-        "catalogVersion": config.get("catalog_version", "1.0"),
-        "minAppVersion": config.get("min_app_version", "1.0.0"),
+        "catalog_version": config.get("catalog_version", "1.0"),
+        "min_app_version": config.get("min_app_version", "1.0.0"),
         "registry": config.get("registry", ""),
-        "lastUpdated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "last_updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "engines": [],
     }
 
@@ -107,21 +98,19 @@ def generate_catalog(repo_root: Path) -> dict:
 
 
 def main():
-    # Determine repo root (script is in scripts/)
     script_dir = Path(__file__).parent
     repo_root = script_dir.parent
 
-    # Allow override via command line
     if len(sys.argv) > 1:
         repo_root = Path(sys.argv[1])
 
     print(f"Scanning {repo_root}")
     catalog = generate_catalog(repo_root)
 
-    # Write catalog.json
-    output_path = repo_root / "catalog.json"
+    # Write catalog.yaml (not JSON!)
+    output_path = repo_root / "catalog.yaml"
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(catalog, f, indent=2, ensure_ascii=False)
+        yaml.dump(catalog, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
     print(f"Generated {output_path}")
     print(f"  Engines: {len(catalog['engines'])}")

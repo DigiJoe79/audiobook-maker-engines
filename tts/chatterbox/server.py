@@ -105,9 +105,14 @@ class ChatterboxServer(BaseTTSServer):
 
         logger.info(f"[chatterbox] Loading Chatterbox Multilingual model on {self.device}...")
 
-        # Suppress huggingface_hub download progress bar and PerthNet output
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            self.model = ChatterboxMultilingualTTS.from_pretrained(self.device)
+        # Load from models directory (set by BaseEngineServer)
+        model_marker = self.models_dir / 't3_mtl23ls_v2.safetensors'
+
+        if not model_marker.exists():
+            raise RuntimeError(f"Model not found at {self.models_dir}. Expected {model_marker}")
+
+        logger.info(f"[chatterbox] Loading from local: {self.models_dir}")
+        self.model = ChatterboxMultilingualTTS.from_local(self.models_dir, self.device)
 
         # Ensure model is on correct device
         if hasattr(self.model, 'to') and str(getattr(self.model, 'device', None)) != self.device:

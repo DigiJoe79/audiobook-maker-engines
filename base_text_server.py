@@ -76,15 +76,16 @@ class BaseTextServer(BaseEngineServer):
     - unload_model() - Unload model and free resources
     """
 
-    def __init__(self, engine_name: str, display_name: str):
+    def __init__(self, engine_name: str, display_name: str, config_path: Optional[str] = None):
         """
         Initialize text processing engine server
 
         Args:
             engine_name: Engine identifier (e.g., "spacy", "nltk")
             display_name: Human-readable name (e.g., "spaCy Text Processor")
+            config_path: Optional path to engine.yaml (for /info endpoint)
         """
-        super().__init__(engine_name, display_name)
+        super().__init__(engine_name, display_name, config_path)
 
         # Setup text-specific routes
         self._setup_segment_route()

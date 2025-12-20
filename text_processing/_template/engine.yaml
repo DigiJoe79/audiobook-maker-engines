@@ -1,0 +1,71 @@
+schema_version: 2
+
+# =============================================================================
+# IDENTITY (required)
+# =============================================================================
+name: "template-text"                   # TODO: Change to your engine name (lowercase, hyphens)
+display_name: "Template Text Processor" # TODO: Human-readable name
+engine_type: "text"
+description: |
+  Template text processing engine for creating new text engines.
+  TODO: Add description of your engine's capabilities.
+
+# =============================================================================
+# UPSTREAM (credits & license attribution)
+# =============================================================================
+upstream:
+  name: "Your Upstream Project"         # TODO: Name of the original project
+  url: "https://github.com/..."         # TODO: URL to upstream repository
+  license: "MIT"                        # TODO: License (MIT, Apache-2.0, etc.)
+
+# =============================================================================
+# DISTRIBUTION (Docker variants)
+# =============================================================================
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64", "linux/arm64"]
+    requires_gpu: false
+
+# =============================================================================
+# MODELS
+# =============================================================================
+models:
+  - name: "default"
+    display_name: "Default Configuration"
+
+default_model: "default"
+
+# =============================================================================
+# LANGUAGES
+# =============================================================================
+supported_languages:
+  - en
+  - de
+  # TODO: Add supported languages
+
+# =============================================================================
+# CAPABILITIES
+# =============================================================================
+capabilities:
+  supports_model_hotswap: true          # Can switch models without restart
+
+# =============================================================================
+# UI PARAMETERS
+# =============================================================================
+parameters:
+  mark_oversized:
+    type: "bool"
+    label: "settings.text.template.markOversized"
+    description: "settings.text.template.markOversizedDesc"
+    default: true
+    readonly: false
+    category: "segmentation"
+  # TODO: Add your engine-specific parameters
+
+# =============================================================================
+# INSTALLATION (for subprocess engines)
+# =============================================================================
+installation:
+  python_version: "3.10"
+  venv_path: "./venv"
+  requires_gpu: false

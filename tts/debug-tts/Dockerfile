@@ -47,8 +47,18 @@ COPY base_tts_server.py ./
 COPY tts/debug-tts/server.py ./
 COPY tts/debug-tts/engine.yaml ./
 
-# Create directories for volumes (samples for speaker samples - not used by debug-tts but for API consistency)
-RUN mkdir -p /app/samples
+# Copy baked-in models
+COPY tts/debug-tts/models/ ./models/
+
+# Copy generic entrypoint script
+COPY scripts/docker-entrypoint.sh ./
+RUN chmod +x /app/docker-entrypoint.sh
+
+# Create standard directories
+# - models: primary model storage (baked-in or symlinked from external)
+# - external_models: mount point for external models (symlinked to models/)
+# - samples: speaker samples for voice cloning
+RUN mkdir -p /app/models /app/external_models /app/samples
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1
@@ -61,6 +71,9 @@ EXPOSE 8766
 # Health check (starts quickly - 10s start period is enough)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:${PORT}/health')" || exit 1
+
+# Entrypoint handles external model symlinks, then runs CMD
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
 # Run server (bind to 0.0.0.0 for container accessibility)
 CMD ["sh", "-c", "python server.py --port ${PORT:-8766} --host 0.0.0.0"]

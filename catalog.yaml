@@ -1,0 +1,141 @@
+catalog_version: '1.0'
+min_app_version: 1.1.0
+registry: ghcr.io/digijoe79/audiobook-maker-engines
+last_updated: '2025-12-20T11:12:02Z'
+engines:
+- name: chatterbox
+  engine_type: tts
+  display_name: Chatterbox
+  description: Resemble AI - Chatterbox TTS, SoTA open-source TTS
+  upstream:
+    name: Resemble AI - Chatterbox TTS
+    url: https://github.com/resemble-ai/chatterbox
+    license: MIT
+  variants:
+  - tag: latest
+    platforms:
+    - linux/amd64
+    requires_gpu: true
+  supported_languages:
+  - ar
+  - da
+  - de
+  - el
+  - en
+  - es
+  - fi
+  - fr
+  - he
+  - hi
+  - it
+  - ja
+  - ko
+  - ms
+  - nl
+  - 'no'
+  - pl
+  - pt
+  - ru
+  - sv
+  - sw
+  - tr
+  - zh
+  constraints:
+    max_text_length: 300
+  capabilities:
+    supports_model_hotswap: false
+    supports_speaker_cloning: true
+    supports_streaming: false
+  parameters:
+    exaggeration:
+      type: float
+      label: settings.tts.chatterbox.exaggeration
+      description: settings.tts.chatterbox.exaggerationDesc
+      default: 0.5
+      min: 0.25
+      max: 2.0
+      step: 0.05
+      readonly: false
+    temperature:
+      type: float
+      label: settings.tts.chatterbox.temperature
+      description: settings.tts.chatterbox.temperatureDesc
+      default: 0.8
+      min: 0.05
+      max: 5.0
+      step: 0.05
+      readonly: false
+    cfg_weight:
+      type: float
+      label: settings.tts.chatterbox.cfgWeight
+      description: settings.tts.chatterbox.cfgWeightDesc
+      default: 0.5
+      min: 0.2
+      max: 1.0
+      step: 0.05
+      readonly: false
+    seed:
+      type: int
+      label: settings.tts.chatterbox.seed
+      description: settings.tts.chatterbox.seedDesc
+      default: 0
+      min: 0
+      max: 2147483647
+      step: 1
+      readonly: false
+  models:
+  - name: multilingual
+    display_name: Multilingual (Pretrained)
+    path: pretrained
+  default_model: ''
+- name: debug-tts
+  engine_type: tts
+  display_name: Debug TTS
+  description: Minimal test engine - generates sine wave tones instead of speech.
+    Useful for testing the pipeline without GPU.
+  upstream:
+    name: Audiobook Maker
+    url: https://github.com/DigiJoe79/audiobook-maker
+    license: MIT
+  variants:
+  - tag: latest
+    platforms:
+    - linux/amd64
+    - linux/arm64
+    requires_gpu: false
+  supported_languages:
+  - de
+  - en
+  - fr
+  - es
+  - it
+  constraints:
+    max_text_length: 10000
+  capabilities:
+    supports_model_hotswap: true
+    supports_speaker_cloning: false
+    supports_streaming: false
+  parameters:
+    pitch:
+      type: float
+      label: settings.tts.debugTts.pitch
+      description: settings.tts.debugTts.pitchDesc
+      default: 1.0
+      min: 0.5
+      max: 2.0
+      step: 0.1
+      readonly: false
+    speed:
+      type: float
+      label: settings.tts.debugTts.speed
+      description: settings.tts.debugTts.speedDesc
+      default: 1.0
+      min: 0.5
+      max: 2.0
+      step: 0.1
+      readonly: false
+  models:
+  - name: default
+    display_name: Default (Sine Wave)
+    path: builtin
+  default_model: default
