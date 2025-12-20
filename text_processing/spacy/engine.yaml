@@ -4,12 +4,19 @@ schema_version: 2
 name: "spacy"
 display_name: "spaCy Text Processor"
 engine_type: "text"
+description: "NLP-based text segmentation for TTS pipelines using spaCy sentence boundaries"
 
 # UPSTREAM
 upstream:
   name: "spaCy"
   url: "https://github.com/explosion/spaCy"
   license: "MIT"
+
+# DISTRIBUTION (Docker)
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64", "linux/arm64"]
+    requires_gpu: false
 
 # LANGUAGES
 supported_languages:

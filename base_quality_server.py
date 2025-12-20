@@ -206,7 +206,7 @@ class BaseQualityServer(BaseEngineServer):
         # Setup quality-specific routes
         self._setup_analyze_route()
 
-        logger.debug(f"[{self.engine_name}] BaseQualityServer initialized (type: {engine_type})")
+        logger.info(f"[{self.engine_name}] Quality server initialized (type: {engine_type})")
 
     def _setup_analyze_route(self):
         """Setup quality-specific /analyze endpoint"""
@@ -238,8 +238,27 @@ class BaseQualityServer(BaseEngineServer):
                         detail="Either audio_base64 or audio_path must be provided"
                     )
 
-                logger.debug(
-                    f"🔍 [{self.engine_name}] Analyzing audio | "
+                # Validate audio data
+                if not audio_bytes or len(audio_bytes) == 0:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Audio data is empty"
+                    )
+
+                # Validate WAV format (check RIFF header)
+                if len(audio_bytes) < 44:  # Minimum WAV header size
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Audio data too small to be valid WAV"
+                    )
+                if audio_bytes[:4] != b'RIFF' or audio_bytes[8:12] != b'WAVE':
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Invalid audio format: expected WAV file"
+                    )
+
+                logger.info(
+                    f"[{self.engine_name}] Analyzing audio | "
                     f"Model: {self.current_model} | "
                     f"Language: {request.language} | "
                     f"Size: {len(audio_bytes)} bytes"

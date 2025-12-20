@@ -32,5 +32,6 @@ numpy>=2.1.0
 pydub>=0.25.1  # MP3 support, no updates since 2021
 
 # Utilities
+httpx>=0.28.0  # Required for Docker HEALTHCHECK
 loguru>=0.7.0,<1.0.0
 pyyaml>=6.0.1  # 6.0.1 fixes Cython build issue

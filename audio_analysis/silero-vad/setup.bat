@@ -112,6 +112,6 @@ echo NOTE: Silero-VAD model is included in the pip package.
 echo       No additional download required.
 echo.
 echo To test the engine server:
-echo   venv\Scripts\python.exe server.py --port 8770
+echo   venv\Scripts\python.exe server.py --port 8769
 echo.
 pause

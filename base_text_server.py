@@ -90,7 +90,7 @@ class BaseTextServer(BaseEngineServer):
         # Setup text-specific routes
         self._setup_segment_route()
 
-        logger.debug(f"[{self.engine_name}] BaseTextServer initialized")
+        logger.info(f"[{self.engine_name}] Text server initialized")
 
     def _setup_segment_route(self):
         """Setup text-specific /segment endpoint"""
@@ -101,6 +101,25 @@ class BaseTextServer(BaseEngineServer):
             try:
                 if not self.model_loaded:
                     raise HTTPException(status_code=400, detail="Model not loaded")
+
+                # Validate text input
+                if not request.text or not request.text.strip():
+                    raise HTTPException(status_code=400, detail="Text cannot be empty")
+
+                # Validate language
+                if not request.language or not request.language.strip():
+                    raise HTTPException(status_code=400, detail="Language cannot be empty")
+
+                # Validate length parameters
+                if request.max_length <= 0:
+                    raise HTTPException(status_code=400, detail="max_length must be positive")
+                if request.min_length < 0:
+                    raise HTTPException(status_code=400, detail="min_length cannot be negative")
+                if request.min_length >= request.max_length:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="min_length must be less than max_length"
+                    )
 
                 logger.info(
                     f"📝 [{self.engine_name}] Segmenting text | "

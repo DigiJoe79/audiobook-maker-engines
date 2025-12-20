@@ -15,7 +15,7 @@
 #   docker run -d -p 8766:8766 audiobook-maker/debug-tts:latest
 #
 #   With custom port:
-#   docker run -d -p 8770:8770 -e PORT=8770 audiobook-maker/debug-tts:latest
+#   docker run -d -p 8766:8766 -e PORT=8766 audiobook-maker/debug-tts:latest
 
 # ==============================================================================
 # Single stage build - minimal image

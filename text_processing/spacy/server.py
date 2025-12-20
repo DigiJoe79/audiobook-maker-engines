@@ -238,13 +238,13 @@ class SpacyServer(BaseTextServer):
         """
         Load spaCy model with optimizations
 
-        Optimizations:
-        - Enable GPU if configured and available
-        - Use senter instead of parser for non-transformer models (10x faster)
-        - Keep parser for transformer models (needed for accuracy)
+        Loading priority:
+        1. Path-based: Check /app/models/{model_name} (baked-in or symlinked)
+        2. Package-based: Try spacy.load(model_name) from site-packages
+        3. On-demand: Download to external_models, symlink to models, then load
 
         Args:
-            model_name: Language code ("en", "de") OR full model name ("en_core_web_sm")
+            model_name: Language code ("en", "de") OR full model name ("en_core_web_md")
         """
         # If model_name is a language code, get the full model name
         if len(model_name) == 2 or (len(model_name) == 5 and model_name[2] == "-"):
@@ -257,48 +257,122 @@ class SpacyServer(BaseTextServer):
             # Extract language code from model name
             language_code = model_name.split('_')[0] if '_' in model_name else model_name[:2]
 
+        logger.info(f"[spacy] Loading model: {spacy_model}")
+
+        # Determine model path
+        model_path = self.models_dir / spacy_model
+
+        # Priority 1: Check if model exists in models_dir (baked-in or symlinked)
+        if model_path.exists():
+            logger.debug(f"[spacy] Loading from path: {model_path}")
+            self._load_model_from_path(model_path, language_code, spacy_model)
+            return
+
+        # Priority 2: Try loading as installed package (site-packages)
         try:
-            logger.debug(f"[spacy] Loading model: {spacy_model}")
+            logger.debug(f"[spacy] Trying to load as package: {spacy_model}")
+            self._load_model_from_path(spacy_model, language_code, spacy_model)
+            return
+        except OSError:
+            logger.debug(f"[spacy] Model not found as package, will download on-demand")
 
-            # Load model with pipeline optimization (CPU only, no CUDA)
-            # Try to use senter instead of parser for faster processing
-            try:
-                self.nlp = spacy.load(spacy_model, exclude=["parser"])
-                if "senter" in self.nlp.pipe_names:
-                    self.nlp.enable_pipe("senter")
-                elif self.nlp.has_pipe("senter"):
-                    self.nlp.enable_pipe("senter")
-                else:
-                    # senter not available, reload with parser
-                    logger.debug("[spacy] Senter not available, reloading with parser")
-                    self.nlp = spacy.load(spacy_model)
-                logger.debug("[spacy] Loaded model with optimized pipeline")
-            except Exception:
-                # Fallback: Load full model
-                logger.warning("[spacy] Pipeline optimization failed, loading full model")
-                self.nlp = spacy.load(spacy_model)
+        # Priority 3: On-demand download to external_models
+        logger.info(f"[spacy] Downloading model on-demand: {spacy_model}")
+        self._download_model(spacy_model)
 
-            # Disable unnecessary pipeline components
-            disabled = []
-            keep_pipes = {"tok2vec", "tagger", "parser", "senter"}
-            for pipe_name in list(self.nlp.pipe_names):
-                if pipe_name not in keep_pipes:
-                    disabled.append(pipe_name)
+        # Create symlink from models_dir to external_models
+        external_path = self.external_models_dir / spacy_model
+        if external_path.exists() and not model_path.exists():
+            model_path.symlink_to(external_path)
+            logger.debug(f"[spacy] Created symlink: {model_path} -> {external_path}")
 
-            if disabled:
-                self.nlp.disable_pipes(*disabled)
-                logger.debug(f"[spacy] Disabled unnecessary pipes: {disabled}")
+        # Load the downloaded model
+        self._load_model_from_path(model_path, language_code, spacy_model)
 
-            self.current_language = language_code
-            self.current_model_name = spacy_model
+    def _download_model(self, model_name: str) -> None:
+        """
+        Download spaCy model on-demand to external_models directory
 
-            logger.debug(f"[spacy] Model loaded successfully: {spacy_model}")
+        Args:
+            model_name: Full spaCy model name (e.g., "de_core_news_md")
+        """
+        import subprocess
+        import shutil
 
-        except OSError as e:
-            raise RuntimeError(
-                f"Failed to load spaCy model '{spacy_model}'. "
-                f"Please run: python -m spacy download {spacy_model}"
-            ) from e
+        # Download using spacy download command
+        logger.info(f"[spacy] Downloading {model_name}...")
+        result = subprocess.run(
+            ["python", "-m", "spacy", "download", model_name],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(f"Failed to download spaCy model '{model_name}': {result.stderr}")
+
+        # Find where spacy installed it and copy to external_models
+        try:
+            import importlib
+            model_module = importlib.import_module(model_name)
+            source_path = Path(model_module.__path__[0])
+
+            dest_path = self.external_models_dir / model_name
+            if dest_path.exists():
+                shutil.rmtree(dest_path)
+            shutil.copytree(source_path, dest_path)
+
+            logger.info(f"[spacy] Model downloaded to: {dest_path}")
+        except Exception as e:
+            logger.warning(f"[spacy] Could not copy model to external_models: {e}")
+            # Model is still usable from site-packages
+
+    def _load_model_from_path(
+        self,
+        model_path_or_name,
+        language_code: str,
+        spacy_model: str
+    ) -> None:
+        """
+        Load spaCy model with pipeline optimizations
+
+        Args:
+            model_path_or_name: Path to model directory or model name
+            language_code: Language code (e.g., "de", "en")
+            spacy_model: Full model name for logging
+        """
+        # Load model with pipeline optimization (CPU only, no CUDA)
+        # Try to use senter instead of parser for faster processing
+        try:
+            self.nlp = spacy.load(model_path_or_name, exclude=["parser"])
+            if "senter" in self.nlp.pipe_names:
+                self.nlp.enable_pipe("senter")
+            elif self.nlp.has_pipe("senter"):
+                self.nlp.enable_pipe("senter")
+            else:
+                # senter not available, reload with parser
+                logger.debug("[spacy] Senter not available, reloading with parser")
+                self.nlp = spacy.load(model_path_or_name)
+            logger.debug("[spacy] Loaded model with optimized pipeline")
+        except Exception:
+            # Fallback: Load full model
+            logger.warning("[spacy] Pipeline optimization failed, loading full model")
+            self.nlp = spacy.load(model_path_or_name)
+
+        # Disable unnecessary pipeline components
+        disabled = []
+        keep_pipes = {"tok2vec", "tagger", "parser", "senter"}
+        for pipe_name in list(self.nlp.pipe_names):
+            if pipe_name not in keep_pipes:
+                disabled.append(pipe_name)
+
+        if disabled:
+            self.nlp.disable_pipes(*disabled)
+            logger.debug(f"[spacy] Disabled unnecessary pipes: {disabled}")
+
+        self.current_language = language_code
+        self.current_model_name = spacy_model
+
+        logger.info(f"[spacy] Model loaded: {spacy_model}")
 
     def unload_model(self) -> None:
         """Unload spaCy model and free resources"""

@@ -104,6 +104,29 @@ class BaseTTSServer(BaseEngineServer):
                 if not self.model_loaded:
                     raise HTTPException(status_code=400, detail="Model not loaded")
 
+                # Validate text input
+                if not request.text or not request.text.strip():
+                    raise HTTPException(status_code=400, detail="Text cannot be empty")
+
+                # Validate language
+                if not request.language or not request.language.strip():
+                    raise HTTPException(status_code=400, detail="Language cannot be empty")
+
+                # Validate speaker samples exist (if provided)
+                if request.tts_speaker_wav:
+                    samples_to_check = (
+                        [request.tts_speaker_wav] if isinstance(request.tts_speaker_wav, str)
+                        else request.tts_speaker_wav
+                    )
+                    for sample in samples_to_check:
+                        if sample and sample.strip():
+                            sample_path = self.samples_dir / sample
+                            if not sample_path.exists():
+                                raise HTTPException(
+                                    status_code=404,
+                                    detail=f"Speaker sample not found: {sample}"
+                                )
+
                 # Clear previous error state on new request
                 self.error_message = None
                 self.status = "processing"
@@ -113,18 +136,16 @@ class BaseTTSServer(BaseEngineServer):
 
                 # Format speaker for logging (basename only, not full path)
                 if isinstance(request.tts_speaker_wav, str):
-                    from pathlib import Path
                     speaker_info = Path(request.tts_speaker_wav).name
                 else:
                     speaker_info = f'{len(request.tts_speaker_wav)} samples'
 
-                # Log TTS parameters for debugging (without text content)
-                logger.debug(
+                # Log TTS generation request
+                logger.info(
                     f"[{self.engine_name}] Generating audio | "
                     f"Model: {self.current_model} | "
                     f"Language: {request.language} | "
-                    f"Speaker: {speaker_info} | "
-                    f"Parameters: {parameters}"
+                    f"Speaker: {speaker_info}"
                 )
 
                 # Call engine-specific implementation

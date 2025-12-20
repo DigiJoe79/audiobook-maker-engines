@@ -264,7 +264,7 @@ class BaseEngineServer(ABC):
         # Setup routes
         self._setup_routes()
 
-        logger.debug(f"[{self.engine_name}] BaseEngineServer initialized")
+        logger.info(f"[{self.engine_name}] Engine initialized")
 
     def _setup_routes(self):
         """Setup FastAPI routes (called automatically)"""
@@ -284,6 +284,7 @@ class BaseEngineServer(ABC):
                     self.current_model = request.engine_model_name
                     self.status = "ready"
 
+                    logger.info(f"[{self.engine_name}] Model loaded: {request.engine_model_name}")
                     return LoadResponse(status="loaded", engine_model_name=request.engine_model_name)
 
                 except HTTPException:
@@ -337,6 +338,7 @@ class BaseEngineServer(ABC):
         @self.app.post("/shutdown", response_model=ShutdownResponse)
         async def shutdown_endpoint():
             """Graceful shutdown request"""
+            logger.info(f"[{self.engine_name}] Shutdown requested")
             self.shutdown_requested = True
 
             # Unload model to free resources
@@ -542,6 +544,9 @@ class BaseEngineServer(ABC):
             port: Port to listen on
             host: Host to bind to (default: localhost only)
         """
+        # Log server startup (visible in Docker logs)
+        logger.info(f"[{self.engine_name}] Starting server on {host}:{port}")
+
         # Create uvicorn server manually to enable graceful shutdown
         config = uvicorn.Config(
             self.app,
