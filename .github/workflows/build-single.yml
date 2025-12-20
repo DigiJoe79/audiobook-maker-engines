@@ -1,0 +1,98 @@
+name: Build Single Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      engine:
+        description: 'Engine to build'
+        required: true
+        type: choice
+        options:
+          - debug-tts
+          - chatterbox
+          - silero-vad
+          - spacy
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/audiobook-maker-engines
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      # Free disk space for large builds (chatterbox)
+      - name: Free disk space
+        if: inputs.engine == 'chatterbox'
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        if: inputs.engine != 'chatterbox'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set engine config
+        id: config
+        run: |
+          case "${{ inputs.engine }}" in
+            debug-tts)
+              echo "dockerfile=tts/debug-tts/Dockerfile" >> $GITHUB_OUTPUT
+              echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+              ;;
+            chatterbox)
+              echo "dockerfile=tts/chatterbox/Dockerfile" >> $GITHUB_OUTPUT
+              echo "platforms=linux/amd64" >> $GITHUB_OUTPUT
+              ;;
+            silero-vad)
+              echo "dockerfile=audio_analysis/silero-vad/Dockerfile" >> $GITHUB_OUTPUT
+              echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+              ;;
+            spacy)
+              echo "dockerfile=text_processing/spacy/Dockerfile" >> $GITHUB_OUTPUT
+              echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/${{ inputs.engine }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./${{ steps.config.outputs.dockerfile }}
+          platforms: ${{ steps.config.outputs.platforms }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -32,15 +32,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # -----------------------------------------------------------------------------
 # Baked-in spaCy Models (DE + EN)
-# Downloaded to site-packages, then copied to /app/models for consistency
+# Downloaded to site-packages, then symlinked to /app/models
 # -----------------------------------------------------------------------------
 RUN python -m spacy download de_core_news_md && \
     python -m spacy download en_core_web_md
 
-# Copy models from site-packages to /app/models for consistent structure
+# Create symlinks to actual model directories (spaCy stores models with version suffix)
+# Structure: site-packages/de_core_news_md/de_core_news_md-X.Y.Z/config.cfg
+# We symlink: /app/models/de_core_news_md -> site-packages/.../de_core_news_md-X.Y.Z
 RUN mkdir -p /app/models && \
-    cp -r /opt/venv/lib/python3.12/site-packages/de_core_news_md /app/models/ && \
-    cp -r /opt/venv/lib/python3.12/site-packages/en_core_web_md /app/models/
+    ln -s /opt/venv/lib/python3.12/site-packages/de_core_news_md/de_core_news_md-* /app/models/de_core_news_md && \
+    ln -s /opt/venv/lib/python3.12/site-packages/en_core_web_md/en_core_web_md-* /app/models/en_core_web_md
 
 # -----------------------------------------------------------------------------
 # Base Server Files
