@@ -18,6 +18,17 @@ variants:
     platforms: ["linux/amd64", "linux/arm64"]
     requires_gpu: false
 
+# MODELS (baked into Docker image)
+models:
+  - name: "de_core_news_md"
+    display_name: "German (MD)"
+    languages: [de]
+  - name: "en_core_web_md"
+    display_name: "English (MD)"
+    languages: [en]
+
+default_model: "en_core_web_md"
+
 # LANGUAGES
 supported_languages:
   - de
