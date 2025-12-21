@@ -4,6 +4,15 @@ schema_version: 2
 name: "vibevoice"
 display_name: "VibeVoice"
 engine_type: "tts"
+description: "Microsoft VibeVoice - Expressive multi-speaker TTS with voice cloning. Supports 1.5B and 7B models for high-quality conversational audio synthesis."
+
+# DISTRIBUTION (Docker)
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64"]
+    requires_gpu: true
+
+default_model: "1.5B"
 
 # UPSTREAM
 upstream:

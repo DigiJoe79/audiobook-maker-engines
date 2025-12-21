@@ -112,13 +112,14 @@ class VibeVoiceServer(BaseTTSServer):
         # Set device after super().__init__
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # Models directory (for downloaded models)
-        self.models_dir = Path(__file__).parent / "models"
-        self.models_dir.mkdir(exist_ok=True)
+        # models_dir and external_models_dir are set by BaseTTSServer
+        # - models_dir: /app/models (baked-in + symlinks to external)
+        # - external_models_dir: /app/external_models (downloads persist here)
 
         from loguru import logger
         logger.info(f"[vibevoice] Running on device: {self.device}")
         logger.info(f"[vibevoice] Models directory: {self.models_dir}")
+        logger.info(f"[vibevoice] External models directory: {self.external_models_dir}")
 
     def get_available_models(self) -> List[ModelInfo]:
         """Return available VibeVoice models (1.5B and 7B with voice cloning)"""
@@ -164,7 +165,9 @@ class VibeVoiceServer(BaseTTSServer):
 
         # Map to HuggingFace model ID
         model_id = f"microsoft/VibeVoice-{model_name}"
-        model_path = self.models_dir / f"VibeVoice-{model_name}"
+        model_dir_name = f"VibeVoice-{model_name}"
+        model_path = self.models_dir / model_dir_name
+        external_path = self.external_models_dir / model_dir_name
 
         logger.info(f"[vibevoice] Loading {model_id} on {self.device}...")
 
@@ -179,11 +182,16 @@ class VibeVoiceServer(BaseTTSServer):
             from vibevoice.modular import VibeVoiceForConditionalGenerationInference
             from vibevoice.processor import VibeVoiceProcessor
 
-            # Download model if not present
+            # Download model if not present in models_dir
+            # Following Model Management Standard: download to external_models, symlink to models
             if not model_path.exists():
-                logger.info(f"[vibevoice] Downloading model to {model_path}...")
-                from huggingface_hub import snapshot_download
-                snapshot_download(model_id, local_dir=str(model_path))
+                if not external_path.exists():
+                    logger.info(f"[vibevoice] Downloading model to {external_path}...")
+                    from huggingface_hub import snapshot_download
+                    snapshot_download(model_id, local_dir=str(external_path))
+                # Create symlink from models_dir to external_models_dir
+                logger.info(f"[vibevoice] Creating symlink: {model_path} -> {external_path}")
+                model_path.symlink_to(external_path)
 
             logger.info(f"[vibevoice] Loading model with dtype={load_dtype}...")
 

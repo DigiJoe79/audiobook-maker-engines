@@ -1,0 +1,133 @@
+schema_version: 2
+
+# IDENTITY
+name: "xtts"
+display_name: "XTTS v2"
+engine_type: "tts"
+description: "Multilingual TTS with voice cloning from Coqui AI. Supports 17 languages with high-quality speech synthesis from reference audio samples."
+
+# UPSTREAM
+upstream:
+  name: "Coqui TTS"
+  url: "https://github.com/coqui-ai/TTS"
+  license: "MPL-2.0"
+
+# DISTRIBUTION
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64"]
+    requires_gpu: true
+
+# MODELS
+# v2.0.2 is baked into Docker image, additional models can be mounted
+models:
+  - name: "v2.0.2"
+    display_name: "XTTS v2.0.2"
+
+default_model: "v2.0.2"
+auto_discover_models: true
+
+# LANGUAGES
+supported_languages:
+  - ar
+  - pt
+  - zh-cn
+  - cs
+  - nl
+  - en
+  - fr
+  - de
+  - it
+  - pl
+  - ru
+  - es
+  - tr
+  - ja
+  - ko
+  - hu
+  - hi
+
+# CONSTRAINTS
+constraints:
+  max_text_length: 250  # Maximum text length per generation
+
+# CAPABILITIES
+capabilities:
+  supports_model_hotswap: true     # Can switch models without restart
+  supports_speaker_cloning: true
+  supports_streaming: false
+
+# UI PARAMETERS
+parameters:
+  temperature:
+    type: "float"
+    label: "settings.tts.xtts.temperature"
+    description: "settings.tts.xtts.temperatureDesc"
+    default: 0.65
+    min: 0.0
+    max: 1.0
+    step: 0.05
+    readonly: false
+
+  length_penalty:
+    type: "float"
+    label: "settings.tts.xtts.lengthPenalty"
+    description: "settings.tts.xtts.lengthPenaltyDesc"
+    default: 1.0
+    min: 0.5
+    max: 2.0
+    step: 0.1
+    readonly: false
+
+  repetition_penalty:
+    type: "float"
+    label: "settings.tts.xtts.repetitionPenalty"
+    description: "settings.tts.xtts.repetitionPenaltyDesc"
+    default: 2.0
+    min: 1.0
+    max: 10.0
+    step: 0.5
+    readonly: false
+
+  top_k:
+    type: "int"
+    label: "settings.tts.xtts.topK"
+    description: "settings.tts.xtts.topKDesc"
+    default: 50
+    min: 10
+    max: 100
+    step: 5
+    readonly: false
+
+  top_p:
+    type: "float"
+    label: "settings.tts.xtts.topP"
+    description: "settings.tts.xtts.topPDesc"
+    default: 0.8
+    min: 0.0
+    max: 1.0
+    step: 0.05
+    readonly: false
+
+  speed:
+    type: "float"
+    label: "settings.tts.xtts.speed"
+    description: "settings.tts.xtts.speedDesc"
+    default: 1.0
+    min: 0.5
+    max: 2.0
+    step: 0.1
+    readonly: false
+
+  enable_text_splitting:
+    type: "bool"
+    label: "settings.tts.xtts.enableTextSplitting"
+    description: "settings.tts.xtts.enableTextSplittingDesc"
+    default: false
+    readonly: true
+
+# INSTALLATION (for subprocess engines)
+installation:
+  python_version: "3.10"  # XTTS requires Python 3.10 for optimal compatibility
+  venv_path: "./venv"
+  requires_gpu: true  # Enable GPU passthrough when running in Docker

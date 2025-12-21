@@ -19,6 +19,8 @@ jobs:
       shared-base: ${{ steps.filter.outputs.shared-base }}
       debug-tts: ${{ steps.filter.outputs.debug-tts }}
       chatterbox: ${{ steps.filter.outputs.chatterbox }}
+      vibevoice: ${{ steps.filter.outputs.vibevoice }}
+      xtts: ${{ steps.filter.outputs.xtts }}
       silero-vad: ${{ steps.filter.outputs.silero-vad }}
       spacy: ${{ steps.filter.outputs.spacy }}
     steps:
@@ -39,6 +41,10 @@ jobs:
               - 'tts/debug-tts/**'
             chatterbox:
               - 'tts/chatterbox/**'
+            vibevoice:
+              - 'tts/vibevoice/**'
+            xtts:
+              - 'tts/xtts/**'
             silero-vad:
               - 'audio_analysis/silero-vad/**'
             spacy:
@@ -50,7 +56,6 @@ jobs:
   build-debug-tts:
     needs: detect-changes
     if: |
-      github.event_name == 'release' ||
       github.event_name == 'workflow_dispatch' ||
       needs.detect-changes.outputs.debug-tts == 'true' ||
       needs.detect-changes.outputs.shared-base == 'true'
@@ -102,7 +107,6 @@ jobs:
   build-chatterbox:
     needs: detect-changes
     if: |
-      github.event_name == 'release' ||
       github.event_name == 'workflow_dispatch' ||
       needs.detect-changes.outputs.chatterbox == 'true' ||
       needs.detect-changes.outputs.shared-base == 'true'
@@ -157,12 +161,129 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ============================================================
+  # VibeVoice (GPU - amd64 only)
+  # ============================================================
+  build-vibevoice:
+    needs: detect-changes
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      needs.detect-changes.outputs.vibevoice == 'true' ||
+      needs.detect-changes.outputs.shared-base == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/vibevoice
+          tags: |
+            type=raw,value=latest
+            type=ref,event=tag
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./tts/vibevoice/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================
+  # XTTS (GPU - amd64 only)
+  # ============================================================
+  build-xtts:
+    needs: detect-changes
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      needs.detect-changes.outputs.xtts == 'true' ||
+      needs.detect-changes.outputs.shared-base == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/xtts
+          tags: |
+            type=raw,value=latest
+            type=ref,event=tag
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./tts/xtts/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================
   # Silero-VAD (Multi-Arch CPU)
   # ============================================================
   build-silero-vad:
     needs: detect-changes
     if: |
-      github.event_name == 'release' ||
       github.event_name == 'workflow_dispatch' ||
       needs.detect-changes.outputs.silero-vad == 'true' ||
       needs.detect-changes.outputs.shared-base == 'true'
@@ -214,7 +335,6 @@ jobs:
   build-spacy:
     needs: detect-changes
     if: |
-      github.event_name == 'release' ||
       github.event_name == 'workflow_dispatch' ||
       needs.detect-changes.outputs.spacy == 'true' ||
       needs.detect-changes.outputs.shared-base == 'true'
@@ -264,7 +384,7 @@ jobs:
   # Generate and Upload catalog.yaml
   # ============================================================
   upload-catalog:
-    needs: [build-debug-tts, build-chatterbox, build-silero-vad, build-spacy]
+    needs: [build-debug-tts, build-chatterbox, build-vibevoice, build-xtts, build-silero-vad, build-spacy]
     if: |
       always() &&
       github.event_name == 'release' &&
