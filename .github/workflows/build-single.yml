@@ -10,6 +10,8 @@ on:
         options:
           - debug-tts
           - chatterbox
+          - vibevoice
+          - xtts
           - silero-vad
           - spacy
 
@@ -24,9 +26,9 @@ jobs:
       contents: read
       packages: write
     steps:
-      # Free disk space for large builds (chatterbox)
+      # Free disk space for large GPU builds
       - name: Free disk space
-        if: inputs.engine == 'chatterbox'
+        if: inputs.engine == 'chatterbox' || inputs.engine == 'vibevoice' || inputs.engine == 'xtts'
         uses: jlumbroso/free-disk-space@main
         with:
           tool-cache: true
@@ -41,7 +43,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up QEMU
-        if: inputs.engine != 'chatterbox'
+        if: inputs.engine != 'chatterbox' && inputs.engine != 'vibevoice' && inputs.engine != 'xtts'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -64,6 +66,14 @@ jobs:
               ;;
             chatterbox)
               echo "dockerfile=tts/chatterbox/Dockerfile" >> $GITHUB_OUTPUT
+              echo "platforms=linux/amd64" >> $GITHUB_OUTPUT
+              ;;
+            vibevoice)
+              echo "dockerfile=tts/vibevoice/Dockerfile" >> $GITHUB_OUTPUT
+              echo "platforms=linux/amd64" >> $GITHUB_OUTPUT
+              ;;
+            xtts)
+              echo "dockerfile=tts/xtts/Dockerfile" >> $GITHUB_OUTPUT
               echo "platforms=linux/amd64" >> $GITHUB_OUTPUT
               ;;
             silero-vad)
