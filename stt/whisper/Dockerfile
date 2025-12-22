@@ -16,11 +16,14 @@ WORKDIR /app
 # System Dependencies
 # -----------------------------------------------------------------------------
 # ffmpeg is required by whisper for audio processing
+# Python 3.12 requires deadsnakes PPA on Ubuntu 22.04
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
     python3.12 \
     python3.12-venv \
     python3.12-dev \
-    python3-pip \
     ffmpeg \
     git \
     && rm -rf /var/lib/apt/lists/* \
