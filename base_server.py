@@ -152,6 +152,13 @@ class EngineModelConfig(CamelCaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class VariantInfo(CamelCaseModel):
+    """Docker image variant info for discovery"""
+    tag: str                            # Docker tag (e.g., "latest", "cpu")
+    platforms: List[str] = Field(default_factory=list)  # e.g., ["linux/amd64"]
+    requires_gpu: bool = False
+
+
 class EngineInfoResponse(CamelCaseModel):
     """
     Static engine metadata from engine.yaml.
@@ -187,6 +194,9 @@ class EngineInfoResponse(CamelCaseModel):
 
     # Installation info
     requires_gpu: bool = False
+
+    # Docker variants (for discovery to match tag -> requires_gpu)
+    variants: List[VariantInfo] = Field(default_factory=list)
 
     # Schema version
     schema_version: int = 2
@@ -484,14 +494,26 @@ class BaseEngineServer(ABC):
                         metadata=metadata
                     ))
 
+        # Parse variants for Docker discovery
+        variants: List[VariantInfo] = []
+        if 'variants' in config:
+            for v in config['variants']:
+                if isinstance(v, dict):
+                    variants.append(VariantInfo(
+                        tag=v.get('tag', 'latest'),
+                        platforms=v.get('platforms', []),
+                        requires_gpu=v.get('requires_gpu', False)
+                    ))
+
         # Determine requires_gpu from installation or variants
+        # Note: Discovery service will override this based on matched variant tag
         requires_gpu = False
         if 'installation' in config:
             requires_gpu = config['installation'].get('requires_gpu', False)
-        elif 'variants' in config:
-            # Check if any variant requires GPU
-            for variant in config.get('variants', []):
-                if variant.get('requires_gpu', False):
+        elif variants:
+            # Fallback: check if any variant requires GPU
+            for variant in variants:
+                if variant.requires_gpu:
                     requires_gpu = True
                     break
 
@@ -509,6 +531,7 @@ class BaseEngineServer(ABC):
             default_model=config.get('default_model', self.default_model),
             auto_discover_models=config.get('auto_discover_models', False),
             requires_gpu=requires_gpu,
+            variants=variants,
             schema_version=config.get('schema_version', 2)
         )
 
