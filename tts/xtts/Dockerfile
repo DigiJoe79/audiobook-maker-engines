@@ -141,4 +141,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 
 # Run entrypoint (symlinks external models, then starts server)
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["python", "server.py", "--port", "8766", "--host", "0.0.0.0"]
+CMD ["sh", "-c", "python server.py --port ${PORT:-8766} --host 0.0.0.0"]
