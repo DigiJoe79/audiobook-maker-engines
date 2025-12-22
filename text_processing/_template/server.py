@@ -28,7 +28,7 @@ from typing import List, Optional
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from base_text_server import BaseTextServer, SegmentItem
-from base_server import ModelInfo, ModelField
+from base_server import ModelInfo
 from loguru import logger
 
 

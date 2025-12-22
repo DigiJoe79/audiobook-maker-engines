@@ -35,7 +35,7 @@ from base_quality_server import (
     AnalyzeResult,
     PronunciationRuleData
 )
-from base_server import ModelInfo, ModelField
+from base_server import ModelInfo
 from loguru import logger
 
 

@@ -76,7 +76,7 @@ class SileroVADEngineServer(BaseQualityServer):
         # Silero VAD model (lazy loaded)
         self.vad_model = None
 
-        logger.debug(f"[silero-vad] Audio analysis engine initialized")
+        logger.debug("[silero-vad] Audio analysis engine initialized")
 
     def _load_vad_model(self):
         """Load Silero VAD model from pip package"""

@@ -28,7 +28,7 @@ import sys
 # Add parent directories to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from base_tts_server import BaseTTSServer
-from base_server import ModelInfo, ModelField
+from base_server import ModelInfo
 from loguru import logger
 
 

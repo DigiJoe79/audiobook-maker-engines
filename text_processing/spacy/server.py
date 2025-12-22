@@ -18,13 +18,11 @@ import warnings
 warnings.filterwarnings("ignore", message=".*weights_only=False.*")
 
 from pathlib import Path  # noqa: E402
-from typing import Dict, Any, List, Optional  # noqa: E402
+from typing import List, Optional  # noqa: E402
 from loguru import logger  # noqa: E402
 import sys  # noqa: E402
 import html  # noqa: E402
 import unicodedata  # noqa: E402
-import yaml  # noqa: E402
-
 import spacy  # noqa: E402
 from spacy.language import Language  # noqa: E402
 
@@ -274,7 +272,7 @@ class SpacyServer(BaseTextServer):
             self._load_model_from_path(spacy_model, language_code, spacy_model)
             return
         except OSError:
-            logger.debug(f"[spacy] Model not found as package, will download on-demand")
+            logger.debug("[spacy] Model not found as package, will download on-demand")
 
         # Priority 3: On-demand download to external_models
         logger.info(f"[spacy] Downloading model on-demand: {spacy_model}")

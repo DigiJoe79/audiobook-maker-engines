@@ -17,7 +17,6 @@ import os
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import argparse
-import yaml
 import warnings
 import contextlib
 import io
@@ -26,7 +25,7 @@ import io
 warnings.filterwarnings('ignore')
 
 # Platform-specific setup
-import platform
+import platform  # noqa: E402
 import tempfile  # noqa: E402
 
 if platform.system() == "Windows":
