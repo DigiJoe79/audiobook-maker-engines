@@ -4,6 +4,16 @@ schema_version: 2
 name: "whisper"
 display_name: "OpenAI Whisper"
 engine_type: "stt"
+description: "OpenAI Whisper - State-of-the-art speech recognition with automatic language detection. Supports transcription and translation across 99+ languages."
+
+# DISTRIBUTION (Docker)
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64"]
+    requires_gpu: true
+  - tag: "cpu"
+    platforms: ["linux/amd64", "linux/arm64"]
+    requires_gpu: false
 
 # UPSTREAM
 upstream:

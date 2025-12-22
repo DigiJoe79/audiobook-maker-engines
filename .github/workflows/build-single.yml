@@ -12,6 +12,8 @@ on:
           - chatterbox
           - vibevoice
           - xtts
+          - whisper
+          - whisper-cpu
           - silero-vad
           - spacy
 
@@ -28,7 +30,7 @@ jobs:
     steps:
       # Free disk space for large GPU builds
       - name: Free disk space
-        if: inputs.engine == 'chatterbox' || inputs.engine == 'vibevoice' || inputs.engine == 'xtts'
+        if: inputs.engine == 'chatterbox' || inputs.engine == 'vibevoice' || inputs.engine == 'xtts' || inputs.engine == 'whisper'
         uses: jlumbroso/free-disk-space@main
         with:
           tool-cache: true
@@ -43,7 +45,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up QEMU
-        if: inputs.engine != 'chatterbox' && inputs.engine != 'vibevoice' && inputs.engine != 'xtts'
+        if: inputs.engine != 'chatterbox' && inputs.engine != 'vibevoice' && inputs.engine != 'xtts' && inputs.engine != 'whisper'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -63,26 +65,50 @@ jobs:
             debug-tts)
               echo "dockerfile=tts/debug-tts/Dockerfile" >> $GITHUB_OUTPUT
               echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+              echo "image_name=debug-tts" >> $GITHUB_OUTPUT
+              echo "tag=latest" >> $GITHUB_OUTPUT
               ;;
             chatterbox)
               echo "dockerfile=tts/chatterbox/Dockerfile" >> $GITHUB_OUTPUT
               echo "platforms=linux/amd64" >> $GITHUB_OUTPUT
+              echo "image_name=chatterbox" >> $GITHUB_OUTPUT
+              echo "tag=latest" >> $GITHUB_OUTPUT
               ;;
             vibevoice)
               echo "dockerfile=tts/vibevoice/Dockerfile" >> $GITHUB_OUTPUT
               echo "platforms=linux/amd64" >> $GITHUB_OUTPUT
+              echo "image_name=vibevoice" >> $GITHUB_OUTPUT
+              echo "tag=latest" >> $GITHUB_OUTPUT
               ;;
             xtts)
               echo "dockerfile=tts/xtts/Dockerfile" >> $GITHUB_OUTPUT
               echo "platforms=linux/amd64" >> $GITHUB_OUTPUT
+              echo "image_name=xtts" >> $GITHUB_OUTPUT
+              echo "tag=latest" >> $GITHUB_OUTPUT
+              ;;
+            whisper)
+              echo "dockerfile=stt/whisper/Dockerfile" >> $GITHUB_OUTPUT
+              echo "platforms=linux/amd64" >> $GITHUB_OUTPUT
+              echo "image_name=whisper" >> $GITHUB_OUTPUT
+              echo "tag=latest" >> $GITHUB_OUTPUT
+              ;;
+            whisper-cpu)
+              echo "dockerfile=stt/whisper/Dockerfile.cpu" >> $GITHUB_OUTPUT
+              echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+              echo "image_name=whisper" >> $GITHUB_OUTPUT
+              echo "tag=cpu" >> $GITHUB_OUTPUT
               ;;
             silero-vad)
               echo "dockerfile=audio_analysis/silero-vad/Dockerfile" >> $GITHUB_OUTPUT
               echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+              echo "image_name=silero-vad" >> $GITHUB_OUTPUT
+              echo "tag=latest" >> $GITHUB_OUTPUT
               ;;
             spacy)
               echo "dockerfile=text_processing/spacy/Dockerfile" >> $GITHUB_OUTPUT
               echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+              echo "image_name=spacy" >> $GITHUB_OUTPUT
+              echo "tag=latest" >> $GITHUB_OUTPUT
               ;;
           esac
 
@@ -90,9 +116,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_PREFIX }}/${{ inputs.engine }}
+          images: ${{ env.IMAGE_PREFIX }}/${{ steps.config.outputs.image_name }}
           tags: |
-            type=raw,value=latest
+            type=raw,value=${{ steps.config.outputs.tag }}
             type=sha,prefix=
 
       - name: Build and push

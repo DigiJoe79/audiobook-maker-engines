@@ -25,28 +25,32 @@ import io
 # Suppress warnings
 warnings.filterwarnings('ignore')
 
-# Set CUDA_PATH for Triton if not already set
-if 'CUDA_PATH' not in os.environ:
-    cuda_locations = [
-        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.5",
-        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.1",
-        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.0",
-        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8",
-    ]
-    for cuda_path in cuda_locations:
-        if os.path.exists(cuda_path):
-            os.environ['CUDA_PATH'] = cuda_path
-            break
-
-# Fix Windows path length issues with Triton
+# Platform-specific setup
+import platform
 import tempfile  # noqa: E402
-TEMP_DIR = Path("C:/Temp/whisper_cache")
-TEMP_DIR.mkdir(parents=True, exist_ok=True)
-os.environ['TMPDIR'] = str(TEMP_DIR)
-os.environ['TEMP'] = str(TEMP_DIR)
-os.environ['TMP'] = str(TEMP_DIR)
-os.environ['TRITON_CACHE_DIR'] = str(TEMP_DIR / "triton")
-tempfile.tempdir = str(TEMP_DIR)
+
+if platform.system() == "Windows":
+    # Set CUDA_PATH for Triton on Windows
+    if 'CUDA_PATH' not in os.environ:
+        cuda_locations = [
+            r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.5",
+            r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.1",
+            r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.0",
+            r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8",
+        ]
+        for cuda_path in cuda_locations:
+            if os.path.exists(cuda_path):
+                os.environ['CUDA_PATH'] = cuda_path
+                break
+
+    # Fix Windows path length issues with Triton
+    TEMP_DIR = Path("C:/Temp/whisper_cache")
+    TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    os.environ['TMPDIR'] = str(TEMP_DIR)
+    os.environ['TEMP'] = str(TEMP_DIR)
+    os.environ['TMP'] = str(TEMP_DIR)
+    os.environ['TRITON_CACHE_DIR'] = str(TEMP_DIR / "triton")
+    tempfile.tempdir = str(TEMP_DIR)
 
 # Add paths for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -241,7 +245,12 @@ class WhisperServer(BaseQualityServer):
     # ============= BaseEngineServer Abstract Methods =============
 
     def load_model(self, model_name: str) -> None:
-        """Load a Whisper model."""
+        """Load a Whisper model following Model Management Standard.
+
+        Models are stored as {model_name}.pt files.
+        - Baked-in models: /app/models/{model_name}.pt
+        - Downloaded models: /app/external_models/{model_name}.pt (symlinked to models/)
+        """
         # Validate model name
         valid_models = [m['name'] for m in self.config['models']]
         if model_name not in valid_models:
@@ -253,9 +262,35 @@ class WhisperServer(BaseQualityServer):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-        # Load new model
+        # Model file paths
+        model_file = f"{model_name}.pt"
+        model_path = self.models_dir / model_file
+        external_path = self.external_models_dir / model_file
+
+        # Ensure directories exist
+        self.models_dir.mkdir(parents=True, exist_ok=True)
+        self.external_models_dir.mkdir(parents=True, exist_ok=True)
+
+        # Check if model needs to be downloaded
+        if not model_path.exists() and not model_path.is_symlink():
+            if external_path.exists():
+                # Model in external_models but not symlinked yet
+                logger.info(f"[whisper] Creating symlink for existing model: {model_name}")
+                model_path.symlink_to(external_path)
+            else:
+                # Download to external_models_dir
+                logger.info(f"[whisper] Downloading model '{model_name}' to external_models...")
+                whisper.load_model(model_name, device="cpu", download_root=str(self.external_models_dir))
+                # Unload immediately - we just wanted to trigger download
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                # Create symlink
+                logger.info(f"[whisper] Creating symlink: {model_path} -> {external_path}")
+                model_path.symlink_to(external_path)
+
+        # Load model from models_dir (will find baked-in or symlinked model)
         logger.info(f"[whisper] Loading model '{model_name}' on {self.device}...")
-        self.whisper_model = whisper.load_model(model_name, device=self.device)
+        self.whisper_model = whisper.load_model(model_name, device=self.device, download_root=str(self.models_dir))
         self.current_model = model_name
         self.model_loaded = True
 
