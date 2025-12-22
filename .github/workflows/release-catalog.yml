@@ -1,0 +1,59 @@
+name: Release Catalog
+
+# Generates and uploads catalog.yaml when a release is published.
+# Docker images are built separately via build-single.yml (manual workflow).
+#
+# Workflow:
+#   1. Build & test image locally
+#   2. Push to GHCR via build-single.yml
+#   3. Pull & verify from GHCR
+#   4. Create release -> this workflow generates catalog.yaml
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # Manual trigger for testing
+
+jobs:
+  # ============================================================
+  # Generate and Upload catalog.yaml
+  # ============================================================
+  upload-catalog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Generate catalog.yaml
+        run: python scripts/generate_catalog.py
+
+      - name: Show catalog contents
+        run: |
+          echo "=== Generated catalog.yaml ==="
+          cat catalog.yaml
+          echo ""
+          echo "=== Engines included ==="
+          grep "^  - name:" catalog.yaml || grep "name:" catalog.yaml | head -20
+
+      - name: Upload catalog to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: catalog.yaml
+
+      - name: Upload as artifact (for manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog
+          path: catalog.yaml
