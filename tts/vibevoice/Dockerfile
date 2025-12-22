@@ -24,8 +24,8 @@
 # ==============================================================================
 # Stage 1: Builder - Install dependencies
 # ==============================================================================
-# Using devel image for CUDA toolkit (nvcc) - required to compile flash-attn
-FROM nvidia/cuda:12.4.1-devel-ubuntu22.04 AS builder
+# Using base image (pre-built flash-attn wheel, no compilation needed)
+FROM nvidia/cuda:12.4.1-base-ubuntu22.04 AS builder
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -64,10 +64,12 @@ WORKDIR /build
 RUN pip install --no-cache-dir numpy cython
 
 # Step 2: PyTorch with CUDA 12.4 support
+# Using 2.5.1 for flash-attn compatibility (pre-built wheels available)
+# --extra-index-url allows pip to find NVIDIA packages on PyPI
 RUN pip install --no-cache-dir \
-    torch==2.6.0 \
-    torchaudio==2.6.0 \
-    --index-url https://download.pytorch.org/whl/cu124
+    torch==2.5.1 \
+    torchaudio==2.5.1 \
+    --extra-index-url https://download.pytorch.org/whl/cu124
 
 # Step 3: Audio processing
 RUN pip install --no-cache-dir \
@@ -81,10 +83,11 @@ RUN pip install --no-cache-dir huggingface_hub
 # Step 5: VibeVoice from community fork
 RUN pip install --no-cache-dir git+https://github.com/vibevoice-community/VibeVoice.git
 
-# Step 6: Flash Attention 2 (MUST be installed AFTER VibeVoice/transformers for ABI compatibility)
-# Requires ninja for fast compilation, psutil for build process
-RUN pip install --no-cache-dir ninja packaging psutil
-RUN pip install --no-cache-dir flash-attn --no-build-isolation
+# Step 6: Flash Attention 2 (pre-built wheel for torch 2.5 + cu124 + python 3.12)
+# Using pre-built wheel from community repo to avoid ABI compatibility issues
+# Source: https://github.com/mjun0812/flash-attention-prebuild-wheels
+RUN pip install --no-cache-dir \
+    https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.5.4/flash_attn-2.8.3+cu124torch2.5-cp312-cp312-linux_x86_64.whl
 
 # Step 7: FastAPI server stack
 RUN pip install --no-cache-dir \

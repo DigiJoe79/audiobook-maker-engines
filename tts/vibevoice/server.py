@@ -163,8 +163,18 @@ class VibeVoiceServer(BaseTTSServer):
 
         model_name = normalized_name
 
-        # Map to HuggingFace model ID
-        model_id = f"microsoft/VibeVoice-{model_name}"
+        # Get HuggingFace model ID from engine.yaml config
+        model_id = None
+        for model_config in self._engine_config.get("models", []):
+            if model_config.get("name") == model_name:
+                model_id = model_config.get("huggingface_id")
+                break
+
+        if not model_id:
+            # Fallback for backwards compatibility
+            model_id = f"microsoft/VibeVoice-{model_name}"
+            logger.warning(f"[vibevoice] huggingface_id not found in config for {model_name}, using fallback: {model_id}")
+
         model_dir_name = f"VibeVoice-{model_name}"
         model_path = self.models_dir / model_dir_name
         external_path = self.external_models_dir / model_dir_name

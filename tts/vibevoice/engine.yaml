@@ -31,11 +31,11 @@ models:
     description: "Smaller model with voice cloning, ~3GB VRAM"
   - name: "7B"
     display_name: "VibeVoice 7B"
-    huggingface_id: "microsoft/VibeVoice-7B"
+    huggingface_id: "vibevoice/VibeVoice-7B"
     vram_gb: 18
     max_audio_minutes: 45
     voice_cloning: true
-    description: "Full model, highest quality with voice cloning, ~18GB VRAM"
+    description: "Full model (community upload), highest quality with voice cloning, ~18GB VRAM"
 
 # LANGUAGES
 # EN and ZH are stable, others are experimental
