@@ -6,9 +6,10 @@ Docker images for [Audiobook Maker](https://github.com/DigiJoe79/audiobook-maker
 
 ## Available Engines
 
+### Production Engines
+
 | Engine | Type | GPU | Platforms | Description |
 |--------|------|-----|-----------|-------------|
-| [debug-tts](tts/debug-tts/) | TTS | No | amd64, arm64 | Test engine - generates sine waves |
 | [chatterbox](tts/chatterbox/) | TTS | Yes | amd64 | Chatterbox multilingual TTS with voice cloning |
 | [vibevoice](tts/vibevoice/) | TTS | Yes | amd64 | Microsoft VibeVoice - expressive multi-speaker TTS |
 | [xtts](tts/xtts/) | TTS | Yes | amd64 | Coqui XTTS v2 - multilingual TTS with voice cloning |
@@ -16,6 +17,17 @@ Docker images for [Audiobook Maker](https://github.com/DigiJoe79/audiobook-maker
 | [whisper](stt/whisper/) | STT | No | amd64, arm64 | OpenAI Whisper - speech recognition (CPU, `:cpu`) |
 | [silero-vad](audio_analysis/silero-vad/) | Audio | No | amd64, arm64 | Silero VAD - voice activity detection |
 | [spacy](text_processing/spacy/) | Text | No | amd64, arm64 | spaCy NLP - text processing and sentence splitting |
+
+### Debug/Test Engines
+
+Lightweight mock engines for testing the pipeline without GPU or ML dependencies.
+
+| Engine | Type | Platforms | Description |
+|--------|------|-----------|-------------|
+| [debug-tts](tts/debug-tts/) | TTS | amd64, arm64 | Generates sine wave tones |
+| [debug-stt](stt/debug-stt/) | STT | amd64, arm64 | Returns mock transcription |
+| [debug-text](text_processing/debug-text/) | Text | amd64, arm64 | Punctuation-based segmentation |
+| [debug-audio](audio_analysis/debug-audio/) | Audio | amd64, arm64 | Returns mock quality metrics |
 
 ## Usage
 

@@ -9,6 +9,9 @@ on:
         type: choice
         options:
           - debug-tts
+          - debug-stt
+          - debug-text
+          - debug-audio
           - chatterbox
           - vibevoice
           - xtts
@@ -66,6 +69,24 @@ jobs:
               echo "dockerfile=tts/debug-tts/Dockerfile" >> $GITHUB_OUTPUT
               echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
               echo "image_name=debug-tts" >> $GITHUB_OUTPUT
+              echo "tag=latest" >> $GITHUB_OUTPUT
+              ;;
+            debug-stt)
+              echo "dockerfile=stt/debug-stt/Dockerfile" >> $GITHUB_OUTPUT
+              echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+              echo "image_name=debug-stt" >> $GITHUB_OUTPUT
+              echo "tag=latest" >> $GITHUB_OUTPUT
+              ;;
+            debug-text)
+              echo "dockerfile=text_processing/debug-text/Dockerfile" >> $GITHUB_OUTPUT
+              echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+              echo "image_name=debug-text" >> $GITHUB_OUTPUT
+              echo "tag=latest" >> $GITHUB_OUTPUT
+              ;;
+            debug-audio)
+              echo "dockerfile=audio_analysis/debug-audio/Dockerfile" >> $GITHUB_OUTPUT
+              echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+              echo "image_name=debug-audio" >> $GITHUB_OUTPUT
               echo "tag=latest" >> $GITHUB_OUTPUT
               ;;
             chatterbox)
