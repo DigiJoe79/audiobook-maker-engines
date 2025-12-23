@@ -12,6 +12,9 @@
 # Models (mounted as volumes, not baked in)
 **/models/
 !tts/debug-tts/models/
+!stt/debug-stt/models/
+!text_processing/debug-text/models/
+!audio_analysis/debug-audio/models/
 
 # IDE
 **/.idea/

@@ -1,0 +1,6 @@
+{
+  "name": "default",
+  "type": "mock_vad",
+  "version": "1.0.0",
+  "description": "Debug Audio dummy model - returns mock audio quality metrics"
+}

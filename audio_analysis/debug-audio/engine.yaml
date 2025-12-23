@@ -1,0 +1,45 @@
+schema_version: 2
+
+# IDENTITY
+name: "debug-audio"
+display_name: "Debug Audio"
+engine_type: "audio"
+description: "Minimal test engine - returns mock audio quality metrics. Useful for testing the pipeline without VAD models."
+
+# DISTRIBUTION
+upstream:
+  name: "Audiobook Maker"
+  url: "https://github.com/DigiJoe79/audiobook-maker"
+  license: "MIT"
+
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64", "linux/arm64"]
+    requires_gpu: false
+
+# MODELS
+models:
+  - name: "default"
+    display_name: "Default (Mock VAD)"
+    path: "builtin"  # No external model files needed
+
+default_model: "default"
+
+# LANGUAGES (audio analysis is language-independent)
+supported_languages: []
+
+# CONSTRAINTS
+constraints:
+  max_audio_duration: 600  # 10 minutes max
+
+# CAPABILITIES
+capabilities:
+  supports_model_hotswap: true   # Instant "loading" (no actual model)
+  supports_vad: true
+  supports_volume_analysis: true
+
+# INSTALLATION (for subprocess engines - optional for Docker-only)
+installation:
+  python_version: "3.10"
+  venv_path: "./venv"
+  requires_gpu: false

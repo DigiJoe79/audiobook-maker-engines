@@ -1,0 +1,6 @@
+{
+  "name": "default",
+  "type": "punctuation",
+  "version": "1.0.0",
+  "description": "Debug Text dummy model - uses punctuation-based segmentation"
+}

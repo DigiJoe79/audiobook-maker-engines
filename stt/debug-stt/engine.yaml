@@ -1,0 +1,50 @@
+schema_version: 2
+
+# IDENTITY
+name: "debug-stt"
+display_name: "Debug STT"
+engine_type: "stt"
+description: "Minimal test engine - returns mock transcription results. Useful for testing the pipeline without GPU."
+
+# DISTRIBUTION
+upstream:
+  name: "Audiobook Maker"
+  url: "https://github.com/DigiJoe79/audiobook-maker"
+  license: "MIT"
+
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64", "linux/arm64"]
+    requires_gpu: false
+
+# MODELS
+models:
+  - name: "default"
+    display_name: "Default (Mock STT)"
+    path: "builtin"  # No external model files needed
+
+default_model: "default"
+
+# LANGUAGES (all major languages supported)
+supported_languages:
+  - de  # German
+  - en  # English
+  - fr  # French
+  - es  # Spanish
+  - it  # Italian
+
+# CONSTRAINTS
+constraints:
+  max_audio_duration: 600  # 10 minutes max
+
+# CAPABILITIES
+capabilities:
+  supports_model_hotswap: true   # Instant "loading" (no actual model)
+  supports_timestamps: false
+  supports_word_level: false
+
+# INSTALLATION (for subprocess engines - optional for Docker-only)
+installation:
+  python_version: "3.10"
+  venv_path: "./venv"
+  requires_gpu: false

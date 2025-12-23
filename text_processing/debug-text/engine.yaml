@@ -1,0 +1,48 @@
+schema_version: 2
+
+# IDENTITY
+name: "debug-text"
+display_name: "Debug Text"
+engine_type: "text"
+description: "Minimal test engine - uses simple punctuation-based text segmentation. Useful for testing the pipeline without NLP models."
+
+# DISTRIBUTION
+upstream:
+  name: "Audiobook Maker"
+  url: "https://github.com/DigiJoe79/audiobook-maker"
+  license: "MIT"
+
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64", "linux/arm64"]
+    requires_gpu: false
+
+# MODELS
+models:
+  - name: "default"
+    display_name: "Default (Punctuation-based)"
+    path: "builtin"  # No external model files needed
+
+default_model: "default"
+
+# LANGUAGES (all major languages - punctuation works universally)
+supported_languages:
+  - de  # German
+  - en  # English
+  - fr  # French
+  - es  # Spanish
+  - it  # Italian
+
+# CONSTRAINTS
+constraints:
+  max_text_length: 100000  # Very permissive for testing
+
+# CAPABILITIES
+capabilities:
+  supports_model_hotswap: true   # Instant "loading" (no actual model)
+
+# INSTALLATION (for subprocess engines - optional for Docker-only)
+installation:
+  python_version: "3.10"
+  venv_path: "./venv"
+  requires_gpu: false

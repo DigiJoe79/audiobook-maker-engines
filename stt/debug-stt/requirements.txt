@@ -1,0 +1,15 @@
+# Debug STT Engine Dependencies
+# Minimal footprint - no ML frameworks, no CUDA
+
+# FastAPI server stack (current versions as of Dec 2025)
+fastapi>=0.115.0,<1.0.0
+uvicorn>=0.32.0,<1.0.0
+pydantic>=2.10.0,<3.0.0
+
+# Utilities
+loguru>=0.7.2,<0.8.0
+httpx>=0.28.0,<1.0.0
+PyYAML>=6.0.0,<7.0.0
+
+# Note: No numpy/scipy needed - pure Python mock implementation
+# Note: No torch/CUDA - CPU only

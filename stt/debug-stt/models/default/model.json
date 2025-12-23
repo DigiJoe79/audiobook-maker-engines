@@ -1,0 +1,6 @@
+{
+  "name": "default",
+  "type": "mock_stt",
+  "version": "1.0.0",
+  "description": "Debug STT dummy model - returns mock transcription"
+}
