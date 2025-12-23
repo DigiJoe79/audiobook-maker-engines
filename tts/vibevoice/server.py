@@ -493,10 +493,10 @@ class VibeVoiceServer(BaseTTSServer):
     def get_package_version(self) -> str:
         """Return VibeVoice package version for health endpoint"""
         try:
-            import vibevoice
-            return f"vibevoice {getattr(vibevoice, '__version__', 'unknown')}"
-        except ImportError:
-            return "vibevoice not installed"
+            from importlib.metadata import version
+            return version("vibevoice")
+        except Exception:
+            return "unknown"
 
 
 if __name__ == "__main__":
