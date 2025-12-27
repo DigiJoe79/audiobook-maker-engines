@@ -253,7 +253,11 @@ class WhisperServer(BaseQualityServer):
         # Validate model name
         valid_models = [m['name'] for m in self.config['models']]
         if model_name not in valid_models:
-            raise ValueError(f"Invalid model: {model_name}. Valid: {valid_models}")
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid model: {model_name}. Valid: {valid_models}"
+            )
 
         # Unload previous model
         if self.whisper_model is not None:

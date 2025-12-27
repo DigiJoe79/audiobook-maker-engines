@@ -159,7 +159,11 @@ class VibeVoiceServer(BaseTTSServer):
             normalized_name = model_name.replace("VibeVoice-", "")
 
         if normalized_name not in valid_models:
-            raise ValueError(f"Unknown model '{model_name}'. Valid models: {valid_models}")
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown model '{model_name}'. Valid models: {valid_models}"
+            )
 
         model_name = normalized_name
 
@@ -283,7 +287,27 @@ class VibeVoiceServer(BaseTTSServer):
         from fastapi import HTTPException
 
         if self.model is None:
-            raise RuntimeError("Model not loaded")
+            raise HTTPException(
+                status_code=503,
+                detail="Model not loaded. Call POST /load first."
+            )
+
+        # Validate text length (from engine.yaml constraints)
+        max_text_length = self._engine_config.get("constraints", {}).get("max_text_length", 5000)
+        if len(text) > max_text_length:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Text too long ({len(text)} chars). VibeVoice max is {max_text_length} chars. "
+                       "Use text segmentation to split into smaller chunks."
+            )
+
+        # VibeVoice supports speaker cloning - validate if samples provided
+        if not speaker_wav or (isinstance(speaker_wav, list) and len(speaker_wav) == 0):
+            raise HTTPException(
+                status_code=400,
+                detail="VibeVoice requires speaker samples for voice cloning. "
+                       "Upload samples via /samples/upload and include sample IDs in tts_speaker_wav."
+            )
 
         # Extract parameters with defaults
         # cfg_scale: 1.3 is recommended (higher values like 2.0 can be "unhinged")

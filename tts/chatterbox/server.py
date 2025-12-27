@@ -99,9 +99,14 @@ class ChatterboxServer(BaseTTSServer):
         """Load Chatterbox TTS model"""
         from loguru import logger
 
+        from fastapi import HTTPException
+
         # Validate model name (Chatterbox only supports 'multilingual' pretrained model)
         if model_name != "multilingual":
-            raise ValueError(f"Unknown model '{model_name}'. Chatterbox only supports 'multilingual'")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown model '{model_name}'. Chatterbox only supports 'multilingual'."
+            )
 
         logger.info(f"[chatterbox] Loading Chatterbox Multilingual model on {self.device}...")
 
@@ -109,7 +114,10 @@ class ChatterboxServer(BaseTTSServer):
         model_marker = self.models_dir / 't3_mtl23ls_v2.safetensors'
 
         if not model_marker.exists():
-            raise RuntimeError(f"Model not found at {self.models_dir}. Expected {model_marker}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model files not found. Ensure model is baked into Docker image or mounted."
+            )
 
         logger.info(f"[chatterbox] Loading from local: {self.models_dir}")
         self.model = ChatterboxMultilingualTTS.from_local(self.models_dir, self.device)
@@ -129,9 +137,30 @@ class ChatterboxServer(BaseTTSServer):
     ) -> bytes:
         """Generate TTS audio using Chatterbox"""
         from loguru import logger
+        from fastapi import HTTPException
 
         if self.model is None:
-            raise RuntimeError("Model not loaded")
+            raise HTTPException(
+                status_code=503,
+                detail="Model not loaded. Call POST /load first."
+            )
+
+        # Validate text length (from engine.yaml constraints)
+        max_text_length = self._engine_config.get("constraints", {}).get("max_text_length", 300)
+        if len(text) > max_text_length:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Text too long ({len(text)} chars). Chatterbox max is {max_text_length} chars. "
+                       "Use text segmentation to split into smaller chunks."
+            )
+
+        # Chatterbox supports speaker cloning - validate if samples provided
+        if not speaker_wav or (isinstance(speaker_wav, list) and len(speaker_wav) == 0):
+            raise HTTPException(
+                status_code=400,
+                detail="Chatterbox requires speaker samples for voice cloning. "
+                       "Upload samples via /samples/upload and include sample IDs in tts_speaker_wav."
+            )
 
         # Extract parameters with defaults
         exaggeration = parameters.get("exaggeration", 0.5)

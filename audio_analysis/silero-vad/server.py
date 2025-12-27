@@ -412,7 +412,11 @@ class SileroVADEngineServer(BaseQualityServer):
             self.model_loaded = True
             self.current_model = "silero-vad"
         else:
-            raise ValueError(f"Unknown model: {model_name}. Silero-VAD only supports 'silero-vad'.")
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown model: {model_name}. Silero-VAD only supports 'silero-vad'."
+            )
 
     def unload_model(self) -> None:
         """

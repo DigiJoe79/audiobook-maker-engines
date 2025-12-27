@@ -134,6 +134,50 @@ class SpacyServer(BaseTextServer):
             f"Device: {self.device} | Model tier: {self.model_tier}"
         )
 
+    def _is_valid_spacy_model(self, model_name: str) -> bool:
+        """
+        Check if model name is a valid spaCy model.
+
+        Valid models match patterns like:
+        - {lang}_core_news_{size} (e.g., de_core_news_md)
+        - {lang}_core_web_{size} (e.g., en_core_web_md)
+
+        Args:
+            model_name: Full spaCy model name to validate
+
+        Returns:
+            True if model name follows valid spaCy naming pattern
+        """
+        import re
+
+        # Check against our known model mapping first
+        md_models = self.models_mapping.get("md", {})
+        if model_name in md_models.values():
+            return True
+
+        # Check against installed models
+        try:
+            import spacy.util
+            installed = spacy.util.get_installed_models()
+            if model_name in installed:
+                return True
+        except Exception:
+            pass
+
+        # Validate against known spaCy model naming patterns
+        # Pattern: {lang}_{type}_{corpus}_{size}
+        # Examples: en_core_web_sm, de_core_news_md, zh_core_web_lg
+        pattern = r'^[a-z]{2,3}_core_(news|web)_(sm|md|lg|trf)$'
+        if re.match(pattern, model_name):
+            return True
+
+        # Also allow transformer models: xx_dep_news_trf, etc.
+        pattern_trf = r'^[a-z]{2,3}_(core|dep)_(news|web)_trf$'
+        if re.match(pattern_trf, model_name):
+            return True
+
+        return False
+
     def _get_model_for_language(self, language: str) -> str:
         """
         Get spaCy model name for language (MD tier only)
@@ -275,6 +319,15 @@ class SpacyServer(BaseTextServer):
             logger.debug("[spacy] Model not found as package, will download on-demand")
 
         # Priority 3: On-demand download to external_models
+        # First validate that the model name is a known spaCy model
+        if not self._is_valid_spacy_model(spacy_model):
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown spaCy model: '{spacy_model}'. Valid models follow the pattern "
+                       f"'{{lang}}_core_{{type}}_{{size}}' (e.g., 'en_core_web_md', 'de_core_news_md')."
+            )
+
         logger.info(f"[spacy] Downloading model on-demand: {spacy_model}")
         self._download_model(spacy_model)
 

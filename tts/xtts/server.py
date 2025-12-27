@@ -74,14 +74,22 @@ class XTTSServer(BaseTTSServer):
 
     def load_model(self, model_name: str) -> None:
         """Load XTTS model into memory"""
+        from fastapi import HTTPException
+
         model_path = self.models_dir / model_name
 
         if not model_path.exists():
-            raise FileNotFoundError(f"Model not found: {model_path}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model not found: {model_name}. Check available models via GET /models."
+            )
 
         config_path = model_path / "config.json"
         if not config_path.exists():
-            raise FileNotFoundError(f"Config not found: {config_path}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid model '{model_name}': config.json not found."
+            )
 
         # Load config
         config = XttsConfig()
@@ -111,8 +119,30 @@ class XTTSServer(BaseTTSServer):
         parameters: Dict[str, Any]
     ) -> bytes:
         """Generate TTS audio with XTTS"""
+        from fastapi import HTTPException
+
         if not self.model:
-            raise RuntimeError("Model not loaded")
+            raise HTTPException(
+                status_code=503,
+                detail="Model not loaded. Call POST /load first."
+            )
+
+        # XTTS requires speaker samples for voice cloning
+        if not speaker_wav or (isinstance(speaker_wav, list) and len(speaker_wav) == 0):
+            raise HTTPException(
+                status_code=400,
+                detail="XTTS requires speaker samples for voice cloning. "
+                       "Upload samples via /samples/upload and include sample IDs in tts_speaker_wav."
+            )
+
+        # Validate text length (from engine.yaml constraints)
+        max_text_length = self._engine_config.get("constraints", {}).get("max_text_length", 250)
+        if len(text) > max_text_length:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Text too long ({len(text)} chars). XTTS max is {max_text_length} chars. "
+                       "Use text segmentation to split into smaller chunks."
+            )
 
         # Resolve speaker filenames to full paths in samples_dir
         if isinstance(speaker_wav, str):
@@ -134,7 +164,10 @@ class XTTSServer(BaseTTSServer):
                 self.latents_cache[speaker_key] = (gpt_cond_latent, speaker_embedding)
             except Exception as e:
                 logger.error(f"Failed to create latents for speaker {speaker_path}: {e}")
-                raise RuntimeError(f"Failed to create speaker latents: {e}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Failed to process speaker sample. Ensure valid WAV file exists: {e}"
+                )
 
         gpt_cond_latent, speaker_embedding = self.latents_cache[speaker_key]
 
@@ -161,6 +194,15 @@ class XTTSServer(BaseTTSServer):
                 enable_text_splitting=False,
                 speed=speed
             )
+        except AssertionError as e:
+            error_msg = str(e)
+            if "maximum of 400 tokens" in error_msg or "gpt_max_text_tokens" in error_msg:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Text too long for XTTS (max 400 tokens). "
+                           "Use text segmentation to split into smaller chunks."
+                )
+            raise  # Re-raise other AssertionErrors
         except RuntimeError as e:
             error_msg = str(e).lower()
             if "out of memory" in error_msg or "cuda" in error_msg:

@@ -53,17 +53,28 @@ class TemplateServer(BaseTTSServer):
         Load a TTS model into memory.
 
         Model Management Pattern:
-        1. Check if model exists in self.models_dir (baked-in or symlinked)
-        2. If not, download to self.external_models_dir and create symlink
-        3. Load model from self.models_dir
+        1. Validate model_name against known models
+        2. Check if model exists in self.models_dir (baked-in or symlinked)
+        3. If not, download to self.external_models_dir and create symlink
+        4. Load model from self.models_dir
 
         Args:
             model_name: Model identifier (e.g., 'default', 'v2.0.3')
 
         Raises:
-            ValueError: If model_name is invalid
-            Exception: If loading fails
+            HTTPException: 400 if model_name is invalid
         """
+        from fastapi import HTTPException
+
+        # TODO: Validate model_name against known models
+        # Example:
+        # valid_models = ["default", "v2.0.3"]
+        # if model_name not in valid_models:
+        #     raise HTTPException(
+        #         status_code=400,
+        #         detail=f"Unknown model '{model_name}'. Valid models: {valid_models}"
+        #     )
+
         logger.info(f"[{self.engine_name}] Loading model: {model_name}")
 
         model_path = self.models_dir / model_name
@@ -118,8 +129,41 @@ class TemplateServer(BaseTTSServer):
             WAV audio as bytes
 
         Raises:
-            Exception: If generation fails
+            HTTPException: 400 for invalid input, 503 if model not loaded
         """
+        from fastapi import HTTPException
+
+        # === VALIDATION (copy these checks to your engine) ===
+
+        # 1. Check model is loaded
+        if not self.model_loaded:
+            raise HTTPException(
+                status_code=503,
+                detail="Model not loaded. Call POST /load first."
+            )
+
+        # 2. Validate text length (from engine.yaml constraints)
+        max_text_length = self._engine_config.get("constraints", {}).get("max_text_length", 500)
+        if len(text) > max_text_length:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Text too long ({len(text)} chars). Max is {max_text_length} chars. "
+                       "Use text segmentation to split into smaller chunks."
+            )
+
+        # 3. Validate speaker samples (if engine requires voice cloning)
+        # TODO: Remove this check if your engine doesn't require speaker samples
+        supports_cloning = self._engine_config.get("capabilities", {}).get("supports_speaker_cloning", False)
+        if supports_cloning:
+            if not speaker_wav or (isinstance(speaker_wav, list) and len(speaker_wav) == 0):
+                raise HTTPException(
+                    status_code=400,
+                    detail="This engine requires speaker samples for voice cloning. "
+                           "Upload samples via /samples/upload and include sample IDs in tts_speaker_wav."
+                )
+
+        # === END VALIDATION ===
+
         # TODO: Implement audio generation
         # Example:
         # audio_array = self.model.synthesize(

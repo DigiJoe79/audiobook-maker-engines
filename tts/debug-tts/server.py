@@ -104,6 +104,14 @@ class DebugTTSServer(BaseTTSServer):
         Returns:
             WAV audio as bytes
         """
+        from fastapi import HTTPException
+
+        if not self.model_loaded:
+            raise HTTPException(
+                status_code=503,
+                detail="Model not loaded. Call POST /load first."
+            )
+
         # Calculate duration based on text length
         # Assume ~10 characters per second of speech (typical speaking rate)
         chars_per_second = parameters.get("speed", 1.0) * 10.0
