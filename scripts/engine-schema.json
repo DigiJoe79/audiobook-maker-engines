@@ -1,0 +1,253 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/DigiJoe79/audiobook-maker-engines/engine-schema.json",
+  "title": "Engine YAML Schema",
+  "description": "Schema for engine.yaml files in audiobook-maker-engines (schema_version: 2)",
+  "type": "object",
+  "required": ["schema_version", "name", "display_name", "engine_type", "upstream", "variants"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 2,
+      "description": "Schema version, must be 2"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Unique engine ID (lowercase, hyphens allowed)"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable name"
+    },
+    "engine_type": {
+      "type": "string",
+      "enum": ["tts", "stt", "text", "audio"],
+      "description": "Engine type"
+    },
+    "description": {
+      "type": "string",
+      "description": "Engine description"
+    },
+    "upstream": {
+      "type": "object",
+      "required": ["name", "url", "license"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Original project name"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Project URL"
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1,
+          "description": "License identifier (e.g., MIT, Apache-2.0)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "variants": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["tag", "platforms", "requires_gpu"],
+        "properties": {
+          "tag": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Docker tag (e.g., latest, cpu)"
+          },
+          "platforms": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^linux/(amd64|arm64)$"
+            },
+            "description": "Supported platforms"
+          },
+          "requires_gpu": {
+            "type": "boolean",
+            "description": "Whether this variant requires GPU"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "display_name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Model identifier"
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human-readable model name"
+          },
+          "languages": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Supported languages for this model"
+          },
+          "path": {
+            "type": "string",
+            "description": "Model path or type indicator"
+          }
+        },
+        "additionalProperties": true
+      },
+      "description": "Available models"
+    },
+    "default_model": {
+      "type": "string",
+      "description": "Default model name (must exist in models array)"
+    },
+    "auto_discover_models": {
+      "type": "boolean",
+      "description": "If true, scans models/ directory for additional models"
+    },
+    "supported_languages": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]{2}(-[a-z]{2})?$"
+      },
+      "description": "Supported language codes (ISO 639-1)"
+    },
+    "constraints": {
+      "type": "object",
+      "properties": {
+        "max_text_length": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum text length per generation"
+        },
+        "max_audio_duration": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum audio duration in seconds"
+        }
+      },
+      "additionalProperties": true
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "supports_model_hotswap": {
+          "type": "boolean",
+          "description": "Can switch models without restart"
+        },
+        "supports_speaker_cloning": {
+          "type": "boolean",
+          "description": "Supports voice cloning from samples"
+        },
+        "supports_streaming": {
+          "type": "boolean",
+          "description": "Supports streaming audio output"
+        },
+        "supports_timestamps": {
+          "type": "boolean",
+          "description": "Returns word-level timestamps"
+        },
+        "supports_word_level": {
+          "type": "boolean",
+          "description": "Returns word-level data"
+        },
+        "supports_vad": {
+          "type": "boolean",
+          "description": "Supports voice activity detection"
+        },
+        "supports_volume_analysis": {
+          "type": "boolean",
+          "description": "Supports volume analysis"
+        }
+      },
+      "additionalProperties": true
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["type", "default"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["float", "int", "bool", "string"],
+            "description": "Parameter type"
+          },
+          "label": {
+            "type": "string",
+            "description": "i18n key for label"
+          },
+          "description": {
+            "type": "string",
+            "description": "i18n key for description"
+          },
+          "default": {
+            "description": "Default value"
+          },
+          "min": {
+            "type": "number",
+            "description": "Minimum value (for numeric types)"
+          },
+          "max": {
+            "type": "number",
+            "description": "Maximum value (for numeric types)"
+          },
+          "step": {
+            "type": "number",
+            "description": "Step increment (for numeric types)"
+          },
+          "readonly": {
+            "type": "boolean",
+            "description": "If true, parameter cannot be changed by user"
+          },
+          "category": {
+            "type": "string",
+            "description": "Parameter category for UI grouping"
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "UI parameters for this engine"
+    },
+    "engine_config": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Engine-specific configuration"
+    },
+    "installation": {
+      "type": "object",
+      "properties": {
+        "python_version": {
+          "type": "string",
+          "pattern": "^3\\.(1[0-9]|[0-9])$",
+          "description": "Required Python version (e.g., 3.10, 3.12)"
+        },
+        "venv_path": {
+          "type": "string",
+          "description": "Virtual environment path"
+        },
+        "requires_gpu": {
+          "type": "boolean",
+          "description": "Whether GPU is required"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

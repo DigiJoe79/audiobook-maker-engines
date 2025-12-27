@@ -1,0 +1,37 @@
+name: Validate Engines
+
+on:
+  push:
+    paths:
+      - '**/engine.yaml'
+      - '**/Dockerfile'
+      - 'scripts/engine-schema.json'
+      - 'scripts/validate_engines.py'
+      - '.github/workflows/validate.yml'
+  pull_request:
+    paths:
+      - '**/engine.yaml'
+      - '**/Dockerfile'
+      - 'scripts/engine-schema.json'
+      - 'scripts/validate_engines.py'
+      - '.github/workflows/validate.yml'
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  validate:
+    name: Validate engine.yaml files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install jsonschema pyyaml
+
+      - name: Validate all engines
+        run: python scripts/validate_engines.py --verbose
