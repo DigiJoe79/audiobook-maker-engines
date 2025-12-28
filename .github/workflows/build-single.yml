@@ -1,4 +1,4 @@
-name: Build Single Engine
+name: Build Engine(s)
 
 on:
   workflow_dispatch:
@@ -8,6 +8,7 @@ on:
         required: true
         type: choice
         options:
+          - all
           - debug-tts
           - debug-stt
           - debug-text
@@ -25,15 +26,35 @@ env:
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/audiobook-maker-engines
 
 jobs:
+  # Determine which engines to build
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Set build matrix
+        id: set-matrix
+        run: |
+          if [ "${{ inputs.engine }}" = "all" ]; then
+            echo 'matrix=["debug-tts","debug-stt","debug-text","debug-audio","chatterbox","vibevoice","xtts","whisper","whisper-cpu","silero-vad","spacy"]' >> $GITHUB_OUTPUT
+          else
+            echo 'matrix=["${{ inputs.engine }}"]' >> $GITHUB_OUTPUT
+          fi
+
   build:
+    needs: prepare
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: ${{ fromJson(needs.prepare.outputs.matrix) }}
     steps:
       # Free disk space for large GPU builds
       - name: Free disk space
-        if: inputs.engine == 'chatterbox' || inputs.engine == 'vibevoice' || inputs.engine == 'xtts' || inputs.engine == 'whisper'
+        if: matrix.engine == 'chatterbox' || matrix.engine == 'vibevoice' || matrix.engine == 'xtts' || matrix.engine == 'whisper'
         uses: jlumbroso/free-disk-space@main
         with:
           tool-cache: true
@@ -48,7 +69,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up QEMU
-        if: inputs.engine != 'chatterbox' && inputs.engine != 'vibevoice' && inputs.engine != 'xtts' && inputs.engine != 'whisper'
+        if: matrix.engine != 'chatterbox' && matrix.engine != 'vibevoice' && matrix.engine != 'xtts' && matrix.engine != 'whisper'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -64,7 +85,7 @@ jobs:
       - name: Set engine config
         id: config
         run: |
-          case "${{ inputs.engine }}" in
+          case "${{ matrix.engine }}" in
             debug-tts)
               echo "dockerfile=tts/debug-tts/Dockerfile" >> $GITHUB_OUTPUT
               echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
