@@ -23,6 +23,7 @@ import signal
 import asyncio
 import os
 import yaml
+from concurrent.futures import ThreadPoolExecutor
 
 
 # ============= Configure Loguru (same format as main backend) =============
@@ -271,6 +272,10 @@ class BaseEngineServer(ABC):
         # Thread safety for model operations
         self._model_lock = asyncio.Lock()
 
+        # Thread pool for non-blocking model loading
+        # max_workers=1 ensures only one load operation at a time
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="model-loader")
+
         # Setup routes
         self._setup_routes()
 
@@ -287,8 +292,22 @@ class BaseEngineServer(ABC):
                     self.status = "loading"
                     self.error_message = None
 
-                    # Call engine-specific implementation
-                    self.load_model(request.engine_model_name)
+                    loop = asyncio.get_event_loop()
+
+                    # Unload current model first to free GPU memory (hotswap)
+                    if self.model_loaded:
+                        logger.info(f"[{self.engine_name}] Unloading current model before hotswap...")
+                        await loop.run_in_executor(self._executor, self.unload_model)
+                        self.model_loaded = False
+                        self.current_model = None
+
+                    # Call engine-specific implementation in thread pool
+                    # This prevents blocking the event loop during long loads
+                    await loop.run_in_executor(
+                        self._executor,
+                        self.load_model,
+                        request.engine_model_name
+                    )
 
                     self.model_loaded = True
                     self.current_model = request.engine_model_name
@@ -357,6 +376,9 @@ class BaseEngineServer(ABC):
                     self.unload_model()
                 except Exception as e:
                     logger.error(f"[{self.engine_name}] Error during unload: {e}")
+
+            # Shutdown executor
+            self._executor.shutdown(wait=False)
 
             # Schedule server shutdown after response is sent (100ms delay)
             if self.server:

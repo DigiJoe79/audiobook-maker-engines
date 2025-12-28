@@ -21,6 +21,7 @@ from abc import abstractmethod
 from loguru import logger
 import traceback
 import base64
+import asyncio
 
 from base_server import BaseEngineServer, CamelCaseModel, ModelInfo as ModelInfo
 
@@ -215,6 +216,13 @@ class BaseQualityServer(BaseEngineServer):
         async def analyze_endpoint(request: AnalyzeRequest):
             """Analyze audio and return quality metrics"""
             try:
+                # Return 503 if model is still loading (non-blocking response)
+                if self.status == "loading":
+                    raise HTTPException(
+                        status_code=503,
+                        detail="Model loading in progress. Retry after loading completes."
+                    )
+
                 if not self.model_loaded:
                     raise HTTPException(status_code=400, detail="Model not loaded")
 
@@ -266,13 +274,18 @@ class BaseQualityServer(BaseEngineServer):
 
                 self.status = "processing"
 
-                # Call engine-specific implementation
-                result = self.analyze_audio(
-                    audio_bytes=audio_bytes,
-                    language=request.language,
-                    thresholds=request.quality_thresholds,
-                    expected_text=request.expected_text,
-                    pronunciation_rules=request.pronunciation_rules
+                # Call engine-specific implementation in thread pool
+                # This prevents blocking the event loop during analysis
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.analyze_audio(
+                        audio_bytes=audio_bytes,
+                        language=request.language,
+                        thresholds=request.quality_thresholds,
+                        expected_text=request.expected_text,
+                        pronunciation_rules=request.pronunciation_rules
+                    )
                 )
 
                 self.status = "ready"

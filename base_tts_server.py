@@ -18,6 +18,7 @@ from pathlib import Path
 from abc import abstractmethod
 from loguru import logger
 import traceback
+import asyncio
 
 from base_server import BaseEngineServer, CamelCaseModel, ModelInfo as ModelInfo
 
@@ -101,6 +102,13 @@ class BaseTTSServer(BaseEngineServer):
         async def generate_endpoint(request: GenerateRequest):
             """Generate TTS audio"""
             try:
+                # Return 503 if model is still loading (non-blocking response)
+                if self.status == "loading":
+                    raise HTTPException(
+                        status_code=503,
+                        detail="Model loading in progress. Retry after loading completes."
+                    )
+
                 if not self.model_loaded:
                     raise HTTPException(status_code=400, detail="Model not loaded")
 
@@ -148,12 +156,17 @@ class BaseTTSServer(BaseEngineServer):
                     f"Speaker: {speaker_info}"
                 )
 
-                # Call engine-specific implementation
-                audio_bytes = self.generate_audio(
-                    text=request.text,
-                    language=request.language,
-                    speaker_wav=request.tts_speaker_wav,
-                    parameters=parameters
+                # Call engine-specific implementation in thread pool
+                # This prevents blocking the event loop during long generations
+                loop = asyncio.get_event_loop()
+                audio_bytes = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.generate_audio(
+                        text=request.text,
+                        language=request.language,
+                        speaker_wav=request.tts_speaker_wav,
+                        parameters=parameters
+                    )
                 )
 
                 self.status = "ready"

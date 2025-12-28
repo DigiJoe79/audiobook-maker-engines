@@ -16,6 +16,7 @@ from typing import List, Optional
 from abc import abstractmethod
 from loguru import logger
 import traceback
+import asyncio
 
 from base_server import BaseEngineServer, CamelCaseModel, ModelInfo as ModelInfo
 
@@ -99,6 +100,13 @@ class BaseTextServer(BaseEngineServer):
         async def segment_endpoint(request: SegmentRequest):
             """Segment text into TTS-ready chunks"""
             try:
+                # Return 503 if model is still loading (non-blocking response)
+                if self.status == "loading":
+                    raise HTTPException(
+                        status_code=503,
+                        detail="Model loading in progress. Retry after loading completes."
+                    )
+
                 if not self.model_loaded:
                     raise HTTPException(status_code=400, detail="Model not loaded")
 
@@ -131,13 +139,18 @@ class BaseTextServer(BaseEngineServer):
 
                 self.status = "processing"
 
-                # Call engine-specific implementation
-                segments = self.segment_text(
-                    text=request.text,
-                    language=request.language,
-                    max_length=request.max_length,
-                    min_length=request.min_length,
-                    mark_oversized=request.mark_oversized
+                # Call engine-specific implementation in thread pool
+                # This prevents blocking the event loop during segmentation
+                loop = asyncio.get_event_loop()
+                segments = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.segment_text(
+                        text=request.text,
+                        language=request.language,
+                        max_length=request.max_length,
+                        min_length=request.min_length,
+                        mark_oversized=request.mark_oversized
+                    )
                 )
 
                 self.status = "ready"

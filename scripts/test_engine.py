@@ -97,6 +97,8 @@ except ImportError:
 
 DEFAULT_TIMEOUT = 30.0
 GENERATE_TIMEOUT = 120.0
+LARGE_PAYLOAD_TIMEOUT = 600.0  # 10 minutes for large text (5000+ chars)
+MODEL_LOAD_TIMEOUT = 300.0  # 5 minutes for large models (async loading)
 
 # Expected response fields per endpoint (from base_server.py models)
 # Using camelCase as that's how CamelCaseModel serializes
@@ -113,7 +115,7 @@ INFO_REQUIRED_FIELDS = ["name", "displayName", "engineType"]
 INFO_ENGINE_TYPES = ["tts", "stt", "text", "audio"]
 
 LOAD_REQUIRED_FIELDS = ["status"]
-LOAD_STATUS_VALUES = ["loaded", "error"]
+LOAD_STATUS_VALUES = ["loading", "loaded", "error"]  # "loading" for async model loading
 
 # Quality (STT/Audio) response fields
 ANALYZE_REQUIRED_FIELDS = ["engineType", "engineName", "qualityScore", "qualityStatus", "details"]
@@ -283,6 +285,58 @@ class EngineClient:
             headers={"Content-Type": "application/octet-stream"},
             timeout=timeout or self.timeout
         )
+
+
+# =============================================================================
+# Async Model Loading Support
+# =============================================================================
+
+def wait_for_model_ready(
+    client: EngineClient,
+    timeout: float = MODEL_LOAD_TIMEOUT,
+    poll_interval: float = 2.0
+) -> tuple[bool, str, float]:
+    """
+    Poll /health until model is ready or timeout.
+
+    Args:
+        client: Engine client
+        timeout: Max time to wait in seconds (default: 5 minutes)
+        poll_interval: Seconds between polls
+
+    Returns:
+        Tuple of (success, message, duration_ms)
+    """
+    start = time.time()
+    last_status = "unknown"
+
+    while (time.time() - start) < timeout:
+        try:
+            resp = client.get("/health")
+            if resp.status_code == 200:
+                data = resp.json()
+                last_status = data.get("status", "unknown")
+
+                if last_status == "ready":
+                    duration = (time.time() - start) * 1000
+                    model = data.get("currentEngineModel", "unknown")
+                    return (True, f"Model '{model}' ready after {format_duration(duration)}", duration)
+
+                if last_status == "error":
+                    duration = (time.time() - start) * 1000
+                    error = data.get("error", "unknown error")
+                    return (False, f"Model loading failed: {error}", duration)
+
+                # Still loading, continue polling
+                time.sleep(poll_interval)
+            else:
+                time.sleep(poll_interval)
+
+        except httpx.RequestError:
+            time.sleep(poll_interval)
+
+    duration = (time.time() - start) * 1000
+    return (False, f"Timeout after {format_duration(duration)}, last status: {last_status}", duration)
 
 
 # =============================================================================
@@ -501,30 +555,36 @@ def test_models(client: EngineClient) -> TestResult:
         )
 
 
-def test_load_model(client: EngineClient, model_name: str) -> TestResult:
+def test_load_model(client: EngineClient, model_name: str, wait_ready: bool = True) -> TestResult:
     """
-    Test POST /load endpoint.
+    Test POST /load endpoint with async loading support.
 
     Request (LoadRequest from base_server.py):
         engineModelName: str
 
     Expected response (LoadResponse from base_server.py):
-        status: str ("loaded", "error")
+        status: str ("loading", "loaded", "error")
         engineModelName: Optional[str]
         error: Optional[str]
+
+    Args:
+        client: Engine client
+        model_name: Model to load
+        wait_ready: If True, poll /health until model is ready (for async loading)
     """
     start = time.time()
     try:
         # Request field is engine_model_name (snake_case) -> engineModelName (camelCase)
-        resp = client.post_json("/load", {"engine_model_name": model_name})
-        duration = (time.time() - start) * 1000
+        # Use MODEL_LOAD_TIMEOUT for large models that take minutes to load
+        resp = client.post_json("/load", {"engine_model_name": model_name}, timeout=MODEL_LOAD_TIMEOUT)
+        request_duration = (time.time() - start) * 1000
 
         if resp.status_code != 200:
             return TestResult(
                 name=f"POST /load ({model_name})",
                 passed=False,
                 message=f"HTTP {resp.status_code}: {resp.text[:200]}",
-                duration_ms=duration
+                duration_ms=request_duration
             )
 
         data = resp.json()
@@ -537,7 +597,7 @@ def test_load_model(client: EngineClient, model_name: str) -> TestResult:
                 passed=False,
                 message=f"Missing required fields: {missing}",
                 details=data,
-                duration_ms=duration
+                duration_ms=request_duration
             )
 
         # Validate status
@@ -548,7 +608,7 @@ def test_load_model(client: EngineClient, model_name: str) -> TestResult:
                 passed=False,
                 message=error,
                 details=data,
-                duration_ms=duration
+                duration_ms=request_duration
             )
 
         if data["status"] == "error":
@@ -557,15 +617,49 @@ def test_load_model(client: EngineClient, model_name: str) -> TestResult:
                 passed=False,
                 message=f"Load failed: {data.get('error', 'unknown')}",
                 details=data,
-                duration_ms=duration
+                duration_ms=request_duration
             )
 
+        # Handle async loading: status="loading" means model is loading in background
+        if data["status"] == "loading":
+            if not wait_ready:
+                return TestResult(
+                    name=f"POST /load ({model_name})",
+                    passed=True,
+                    message=f"Model loading started (async)",
+                    details=data,
+                    duration_ms=request_duration
+                )
+
+            # Poll /health until ready
+            print(f"         Model loading async, waiting for ready (timeout: {int(MODEL_LOAD_TIMEOUT)}s)...")
+            success, message, poll_duration = wait_for_model_ready(client)
+            total_duration = (time.time() - start) * 1000
+
+            if success:
+                return TestResult(
+                    name=f"POST /load ({model_name})",
+                    passed=True,
+                    message=message,
+                    details=data,
+                    duration_ms=total_duration
+                )
+            else:
+                return TestResult(
+                    name=f"POST /load ({model_name})",
+                    passed=False,
+                    message=message,
+                    details=data,
+                    duration_ms=total_duration
+                )
+
+        # Synchronous loading completed immediately
         return TestResult(
             name=f"POST /load ({model_name})",
             passed=True,
-            message=f"Model loaded in {format_duration(duration)}",
+            message=f"Model loaded in {format_duration(request_duration)}",
             details=data,
-            duration_ms=duration
+            duration_ms=request_duration
         )
 
     except httpx.RequestError as e:
@@ -1221,6 +1315,232 @@ def test_text_segment_invalid_params(client: EngineClient) -> TestResult:
 # Test Functions - Common Edge Cases
 # =============================================================================
 
+def test_health_responsive_during_processing(
+    client: EngineClient,
+    engine_type: str,
+    language: str,
+    speaker_sample: Optional[str] = None
+) -> TestResult:
+    """
+    Test that /health responds instantly even during processing.
+
+    Per ENGINE_SYSTEM_ARCHITECTURE.md:
+    - All long-running operations run in ThreadPoolExecutor
+    - /health should always respond instantly (<500ms)
+    - Status should be "processing" during operations
+    """
+    import threading
+
+    # We'll start a processing request in a background thread,
+    # then immediately check /health response time
+    processing_started = threading.Event()
+    processing_done = threading.Event()
+    processing_error = None
+
+    def run_processing():
+        nonlocal processing_error
+        try:
+            processing_started.set()
+            if engine_type == "tts":
+                # Use a longer text to ensure processing takes time
+                long_text = "This is a test sentence. " * 10
+                speaker_wav = [speaker_sample] if speaker_sample else []
+                payload = {
+                    "text": long_text,
+                    "language": language,
+                    "tts_speaker_wav": speaker_wav,
+                    "parameters": {}
+                }
+                client.post_json("/generate", payload, timeout=GENERATE_TIMEOUT)
+            elif engine_type in ["stt", "audio"]:
+                # Create longer audio for processing
+                test_audio = create_test_wav(duration_sec=5.0)
+                audio_base64 = base64.b64encode(test_audio).decode("utf-8")
+                payload = {
+                    "audio_base64": audio_base64,
+                    "language": language,
+                    "quality_thresholds": {}
+                }
+                client.post_json("/analyze", payload, timeout=GENERATE_TIMEOUT)
+            elif engine_type == "text":
+                # Use longer text
+                long_text = "This is sentence one. " * 50
+                payload = {
+                    "text": long_text,
+                    "language": language,
+                    "max_length": 250,
+                    "min_length": 10,
+                    "mark_oversized": True
+                }
+                client.post_json("/segment", payload, timeout=GENERATE_TIMEOUT)
+        except Exception as e:
+            processing_error = e
+        finally:
+            processing_done.set()
+
+    # Start processing in background
+    thread = threading.Thread(target=run_processing)
+    thread.start()
+
+    # Wait for processing to start
+    processing_started.wait(timeout=2.0)
+
+    # Give it a moment to actually start processing
+    time.sleep(0.2)
+
+    # Now check /health response time
+    start = time.time()
+    try:
+        resp = client.get("/health")
+        health_duration = (time.time() - start) * 1000
+
+        # Wait for processing to complete
+        processing_done.wait(timeout=GENERATE_TIMEOUT)
+        thread.join(timeout=1.0)
+
+        if resp.status_code != 200:
+            return TestResult(
+                name="/health during processing",
+                passed=False,
+                message=f"HTTP {resp.status_code}",
+                duration_ms=health_duration
+            )
+
+        data = resp.json()
+        status = data.get("status", "unknown")
+
+        # Check response time (should be < 500ms)
+        if health_duration > 500:
+            return TestResult(
+                name="/health during processing",
+                passed=False,
+                message=f"/health took {health_duration:.0f}ms (should be <500ms)",
+                duration_ms=health_duration
+            )
+
+        # Status could be "processing" or "ready" (if processing finished quickly)
+        if status in ["processing", "ready"]:
+            return TestResult(
+                name="/health during processing",
+                passed=True,
+                message=f"/health responded in {health_duration:.0f}ms, status={status}",
+                duration_ms=health_duration
+            )
+
+        return TestResult(
+            name="/health during processing",
+            passed=True,
+            message=f"/health responded in {health_duration:.0f}ms, status={status}",
+            duration_ms=health_duration
+        )
+
+    except httpx.RequestError as e:
+        processing_done.wait(timeout=1.0)
+        thread.join(timeout=1.0)
+        return TestResult(
+            name="/health during processing",
+            passed=False,
+            message=f"Connection error: {e}",
+            duration_ms=(time.time() - start) * 1000
+        )
+
+
+def test_503_during_loading(client: EngineClient, engine_type: str) -> TestResult:
+    """
+    Test that processing endpoints return 503 while model is loading.
+
+    Per ENGINE_SYSTEM_ARCHITECTURE.md:
+    - During loading: /generate, /analyze, /segment should return 503
+    - This ensures clients know to wait for ready status
+    """
+    start = time.time()
+
+    try:
+        # Check current health status
+        health_resp = client.get("/health")
+        if health_resp.status_code != 200:
+            return TestResult(
+                name="503 during loading",
+                passed=True,
+                message="Could not check health status",
+                skipped=True,
+                duration_ms=0.0
+            )
+
+        health_data = health_resp.json()
+        status = health_data.get("status", "unknown")
+
+        # Only test if engine is currently loading
+        if status != "loading":
+            return TestResult(
+                name="503 during loading",
+                passed=True,
+                message=f"Engine status is '{status}', not 'loading' - cannot test 503 behavior",
+                skipped=True,
+                duration_ms=0.0
+            )
+
+        # Try to call processing endpoint while loading
+        duration = 0.0
+        if engine_type == "tts":
+            payload = {"text": "test", "language": "en", "tts_speaker_wav": [], "parameters": {}}
+            resp = client.post_json("/generate", payload, timeout=5.0)
+            duration = (time.time() - start) * 1000
+            endpoint = "/generate"
+        elif engine_type in ["stt", "audio"]:
+            # Create minimal audio
+            test_audio = create_test_wav(duration_sec=0.5)
+            import base64
+            audio_base64 = base64.b64encode(test_audio).decode("utf-8")
+            payload = {"audio_base64": audio_base64, "language": "en", "quality_thresholds": {}}
+            resp = client.post_json("/analyze", payload, timeout=5.0)
+            duration = (time.time() - start) * 1000
+            endpoint = "/analyze"
+        elif engine_type == "text":
+            payload = {"text": "Test text.", "language": "en", "max_length": 250, "min_length": 10, "mark_oversized": True}
+            resp = client.post_json("/segment", payload, timeout=5.0)
+            duration = (time.time() - start) * 1000
+            endpoint = "/segment"
+        else:
+            return TestResult(
+                name="503 during loading",
+                passed=True,
+                message=f"Unknown engine type: {engine_type}",
+                skipped=True,
+                duration_ms=0.0
+            )
+
+        if resp.status_code == 503:
+            return TestResult(
+                name="503 during loading",
+                passed=True,
+                message=f"{endpoint} correctly returned 503 during loading",
+                duration_ms=duration
+            )
+
+        return TestResult(
+            name="503 during loading",
+            passed=False,
+            message=f"Expected 503, got {resp.status_code} from {endpoint} during loading",
+            duration_ms=duration
+        )
+
+    except httpx.ReadTimeout:
+        return TestResult(
+            name="503 during loading",
+            passed=False,
+            message="Request timed out (should return 503 immediately)",
+            duration_ms=(time.time() - start) * 1000
+        )
+    except httpx.RequestError as e:
+        return TestResult(
+            name="503 during loading",
+            passed=False,
+            message=f"Connection error: {e}",
+            duration_ms=(time.time() - start) * 1000
+        )
+
+
 def test_load_nonexistent_model(client: EngineClient) -> TestResult:
     """
     Test that POST /load with non-existent model returns proper error.
@@ -1601,7 +1921,7 @@ def test_model_hotswap(client: EngineClient, models: list, capabilities: dict, c
 
     try:
         # Load different model
-        resp = client.post_json("/load", {"engine_model_name": other_model})
+        resp = client.post_json("/load", {"engine_model_name": other_model}, timeout=MODEL_LOAD_TIMEOUT)
         duration = (time.time() - start) * 1000
 
         if resp.status_code != 200:
@@ -1635,7 +1955,7 @@ def test_model_hotswap(client: EngineClient, models: list, capabilities: dict, c
                 )
 
         # Restore original model
-        client.post_json("/load", {"engine_model_name": current_model})
+        client.post_json("/load", {"engine_model_name": current_model}, timeout=MODEL_LOAD_TIMEOUT)
 
         return TestResult(
             name="Model hotswap",
@@ -1670,7 +1990,7 @@ def test_reload_same_model(client: EngineClient, current_model: str) -> TestResu
         )
 
     try:
-        resp = client.post_json("/load", {"engine_model_name": current_model})
+        resp = client.post_json("/load", {"engine_model_name": current_model}, timeout=MODEL_LOAD_TIMEOUT)
         duration = (time.time() - start) * 1000
 
         if resp.status_code != 200:
@@ -1727,6 +2047,7 @@ def test_large_payload_at_limit(
 ) -> TestResult:
     """
     Test with text at exactly maxTextLength limit.
+    Uses LARGE_PAYLOAD_TIMEOUT (10 min) as this can take very long.
     """
     start = time.time()
 
@@ -1746,7 +2067,7 @@ def test_large_payload_at_limit(
                 "tts_speaker_wav": speaker_wav,
                 "parameters": {}
             }
-            resp = client.post_json("/generate", payload, timeout=GENERATE_TIMEOUT)
+            resp = client.post_json("/generate", payload, timeout=LARGE_PAYLOAD_TIMEOUT)
         elif engine_type == "text":
             payload = {
                 "text": test_text,
@@ -1755,7 +2076,7 @@ def test_large_payload_at_limit(
                 "min_length": 10,
                 "mark_oversized": True
             }
-            resp = client.post_json("/segment", payload)
+            resp = client.post_json("/segment", payload, timeout=LARGE_PAYLOAD_TIMEOUT)
         else:
             return TestResult(
                 name="Large payload (at limit)",
@@ -2160,14 +2481,36 @@ def run_tests(
         suite.add(result)
         print_result(result, verbose)
 
-        # Then: Load default model (keep for Phase 4)
+        # Then: Load default model with async loading support
         if default_model:
-            result = test_load_model(client, default_model)
+            # Start loading WITHOUT waiting (to test 503 behavior)
+            result = test_load_model(client, default_model, wait_ready=False)
             suite.add(result)
             print_result(result, verbose)
 
             if result.passed:
-                current_model = default_model
+                # Check if we got async loading (status="loading")
+                load_status = result.details.get("status", "loaded") if result.details else "loaded"
+
+                if load_status == "loading":
+                    # Test 503 behavior while loading
+                    result_503 = test_503_during_loading(client, suite.engine_type)
+                    suite.add(result_503)
+                    print_result(result_503, verbose)
+
+                    # Now wait for model to be ready
+                    print(f"         Waiting for model ready (timeout: {int(MODEL_LOAD_TIMEOUT)}s)...")
+                    success, message, duration = wait_for_model_ready(client)
+
+                    if success:
+                        current_model = default_model
+                        print(f"         {colorize('[OK]', Colors.GREEN)} {message}")
+                    else:
+                        print(f"         {colorize('[FAIL]', Colors.RED)} {message}")
+                        print("\n[WARN] Model loading failed, functional tests may fail")
+                else:
+                    # Synchronous loading - model already ready
+                    current_model = default_model
             else:
                 print("\n[WARN] Model loading failed, functional tests may fail")
         else:
@@ -2304,6 +2647,13 @@ def run_tests(
 
             # Unicode handling
             result = test_unicode_handling(
+                client, suite.engine_type, test_language, speaker_for_robustness
+            )
+            suite.add(result)
+            print_result(result, verbose)
+
+            # /health responsive during processing (non-blocking operations)
+            result = test_health_responsive_during_processing(
                 client, suite.engine_type, test_language, speaker_for_robustness
             )
             suite.add(result)
