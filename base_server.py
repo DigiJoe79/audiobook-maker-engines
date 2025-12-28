@@ -664,7 +664,7 @@ class BaseEngineServer(ABC):
                 self._cleanup_gpu_memory()
                 raise HTTPException(
                     status_code=503,
-                    detail=f"[GPU_OOM]GPU out of memory. Try smaller input or restart engine."
+                    detail="[GPU_OOM]GPU out of memory. Try smaller input or restart engine."
                 )
 
         # General error handling

@@ -64,8 +64,6 @@ class TemplateServer(BaseTTSServer):
         Raises:
             HTTPException: 400 if model_name is invalid
         """
-        from fastapi import HTTPException
-
         # TODO: Validate model_name against known models
         # Example:
         # valid_models = ["default", "v2.0.3"]

@@ -26,8 +26,7 @@ import yaml
 
 # Try to import jsonschema, provide helpful error if missing
 try:
-    import jsonschema
-    from jsonschema import Draft7Validator, ValidationError
+    from jsonschema import Draft7Validator
 except ImportError:
     print("[FAIL] jsonschema package not installed")
     print("       Install with: pip install jsonschema")
@@ -219,11 +218,11 @@ def validate_gpu_requirement_matches_dockerfile(
 
     if requires_gpu and not uses_cuda:
         result.add_warning(
-            f"requires_gpu: true but Dockerfile doesn't use nvidia/cuda base image"
+            "requires_gpu: true but Dockerfile doesn't use nvidia/cuda base image"
         )
     elif not requires_gpu and uses_cuda:
         result.add_warning(
-            f"requires_gpu: false but Dockerfile uses nvidia/cuda base image"
+            "requires_gpu: false but Dockerfile uses nvidia/cuda base image"
         )
 
 

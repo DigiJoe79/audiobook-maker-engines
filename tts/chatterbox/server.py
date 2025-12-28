@@ -11,7 +11,6 @@ import io
 import warnings
 import logging  # Only for suppressing third-party library logs
 import os
-import gc
 import numpy as np
 import torch
 
@@ -112,7 +111,7 @@ class ChatterboxServer(BaseTTSServer):
         if not model_marker.exists():
             raise HTTPException(
                 status_code=400,
-                detail=f"Model files not found. Ensure model is baked into Docker image or mounted."
+                detail="Model files not found. Ensure model is baked into Docker image or mounted."
             )
 
         logger.info(f"[chatterbox] Loading from local: {self.models_dir}")

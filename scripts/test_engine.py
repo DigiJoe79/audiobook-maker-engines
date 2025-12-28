@@ -535,7 +535,6 @@ def test_models(client: EngineClient) -> TestResult:
             )
 
         models = data["models"]
-        model_names = [m.get("name", "?") for m in models]
         default = data.get("defaultModel", "none")
 
         return TestResult(
@@ -626,7 +625,7 @@ def test_load_model(client: EngineClient, model_name: str, wait_ready: bool = Tr
                 return TestResult(
                     name=f"POST /load ({model_name})",
                     passed=True,
-                    message=f"Model loading started (async)",
+                    message="Model loading started (async)",
                     details=data,
                     duration_ms=request_duration
                 )
@@ -888,7 +887,7 @@ def test_tts_generate_no_speaker(client: EngineClient, language: str) -> TestRes
         return TestResult(
             name="POST /generate (no speaker)",
             passed=False,
-            message=f"Timeout - engine may be stuck",
+            message="Timeout - engine may be stuck",
             duration_ms=(time.time() - start) * 1000
         )
     except httpx.RequestError as e:
@@ -944,7 +943,7 @@ def test_tts_generate_invalid_language(client: EngineClient) -> TestResult:
         return TestResult(
             name="POST /generate (invalid lang)",
             passed=False,
-            message=f"Timeout",
+            message="Timeout",
             duration_ms=(time.time() - start) * 1000
         )
     except httpx.RequestError as e:
@@ -1603,7 +1602,6 @@ def test_info_camelcase(client: EngineClient, info_data: dict) -> TestResult:
     Test that all top-level keys in /info response are camelCase.
     Strict validation: fail if any snake_case keys found.
     """
-    start = time.time()
     duration = 0.0  # Already have data, no request needed
 
     invalid_keys = validate_camelcase_keys(info_data)
@@ -1630,7 +1628,6 @@ def test_info_deep_validation(client: EngineClient, info_data: dict) -> TestResu
     Deep validation of /info response fields.
     Checks optional fields have correct types when present.
     """
-    start = time.time()
     duration = 0.0  # Already have data
     errors = []
 
@@ -1711,7 +1708,6 @@ def test_models_item_structure(client: EngineClient, models_data: dict) -> TestR
     Validate structure of each model in /models response.
     Each model should have 'name' and 'displayName'.
     """
-    start = time.time()
     duration = 0.0  # Already have data
     errors = []
 
@@ -1754,7 +1750,6 @@ def test_health_gpu_fields(client: EngineClient, health_data: dict) -> TestResul
     """
     When device=cuda, GPU memory fields should be present.
     """
-    start = time.time()
     duration = 0.0  # Already have data
 
     device = health_data.get("device", "cpu")
@@ -1850,7 +1845,7 @@ def test_tts_samples_upload(client: EngineClient, sample_id: Optional[str] = Non
             return TestResult(
                 name="POST /samples/upload",
                 passed=False,
-                message=f"Upload succeeded but sample not found in /samples/check",
+                message="Upload succeeded but sample not found in /samples/check",
                 duration_ms=duration
             )
 
@@ -2206,7 +2201,7 @@ def test_large_payload_over_limit(
         return TestResult(
             name="Large payload (over limit)",
             passed=False,
-            message=f"Timeout (should reject quickly, not process)",
+            message="Timeout (should reject quickly, not process)",
             duration_ms=(time.time() - start) * 1000
         )
     except httpx.RequestError as e:
