@@ -43,7 +43,7 @@ class DebugAudioServer(BaseQualityServer):
         # No actual model needed
         self.model = None
         self.default_model = "default"
-        self.device = "cpu"
+        # Note: self.device property is provided by BaseEngineServer (auto-detects cuda/cpu)
 
         logger.info("[debug-audio] Debug Audio Engine initialized (mock analysis)")
 
@@ -166,8 +166,7 @@ class DebugAudioServer(BaseQualityServer):
         """Free resources (nothing to free for debug engine)."""
         logger.info("[debug-audio] Unloading model")
         self.model = None
-        self.current_model = None
-        self.model_loaded = False
+        # Note: gc.collect() and state reset are handled by base_server.py
 
     def get_available_models(self) -> List[ModelInfo]:
         """Return available debug models by scanning models directory."""

@@ -44,7 +44,7 @@ class TemplateServer(BaseTTSServer):
         # TODO: Initialize your engine-specific state
         self.model = None
         self.default_model = "default"
-        self.device = "cpu"  # or "cuda" for GPU engines
+        # Note: self.device property is provided by BaseEngineServer (auto-detects cuda/cpu)
 
         logger.info(f"[{self.engine_name}] Engine initialized")
 
@@ -131,38 +131,14 @@ class TemplateServer(BaseTTSServer):
         Raises:
             HTTPException: 400 for invalid input, 503 if model not loaded
         """
-        from fastapi import HTTPException
-
-        # === VALIDATION (copy these checks to your engine) ===
-
-        # 1. Check model is loaded
-        if not self.model_loaded:
-            raise HTTPException(
-                status_code=503,
-                detail="Model not loaded. Call POST /load first."
-            )
-
-        # 2. Validate text length (from engine.yaml constraints)
-        max_text_length = self._engine_config.get("constraints", {}).get("max_text_length", 500)
-        if len(text) > max_text_length:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Text too long ({len(text)} chars). Max is {max_text_length} chars. "
-                       "Use text segmentation to split into smaller chunks."
-            )
-
-        # 3. Validate speaker samples (if engine requires voice cloning)
-        # TODO: Remove this check if your engine doesn't require speaker samples
-        supports_cloning = self._engine_config.get("capabilities", {}).get("supports_speaker_cloning", False)
-        if supports_cloning:
-            if not speaker_wav or (isinstance(speaker_wav, list) and len(speaker_wav) == 0):
-                raise HTTPException(
-                    status_code=400,
-                    detail="This engine requires speaker samples for voice cloning. "
-                           "Upload samples via /samples/upload and include sample IDs in tts_speaker_wav."
-                )
-
-        # === END VALIDATION ===
+        # Note: The following validations are handled by base_tts_server.py:
+        # - Model loaded check (self.model_loaded)
+        # - Text empty check
+        # - Language empty check
+        # - max_text_length from engine.yaml constraints
+        # - Speaker samples required if supports_speaker_cloning=true in engine.yaml
+        # - Speaker sample files exist check
+        # - GPU OOM error handling (RuntimeError with "out of memory")
 
         # TODO: Implement audio generation
         # Example:
@@ -185,12 +161,7 @@ class TemplateServer(BaseTTSServer):
             del self.model
             self.model = None
 
-        self.current_model = None
-        self.model_loaded = False
-
-        # Force garbage collection
-        import gc
-        gc.collect()
+        # Note: GPU cleanup, gc.collect(), and state reset are handled by base_server.py
 
     def get_available_models(self) -> List[ModelInfo]:
         """

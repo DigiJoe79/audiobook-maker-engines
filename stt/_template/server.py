@@ -59,7 +59,7 @@ class TemplateSTTServer(BaseQualityServer):
         # TODO: Initialize your STT model here
         self.model = None
         self.default_model = "base"
-        self.device = "cpu"  # or "cuda" for GPU engines
+        # Note: self.device property is provided by BaseEngineServer (auto-detects cuda/cpu)
 
         logger.info(f"[{self.engine_name}] STT engine initialized")
 
@@ -203,12 +203,7 @@ class TemplateSTTServer(BaseQualityServer):
         if self.model is not None:
             self.model = None
 
-        self.model_loaded = False
-        self.current_model = None
-
-        # Force garbage collection
-        import gc
-        gc.collect()
+        # Note: GPU cleanup, gc.collect(), and state reset are handled by base_server.py
 
     def get_available_models(self) -> List[ModelInfo]:
         """

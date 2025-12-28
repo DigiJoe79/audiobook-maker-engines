@@ -40,24 +40,24 @@ from loguru import logger  # noqa: E402
 import numpy as np  # noqa: E402
 
 # Silero-VAD package version (lazy loaded to avoid slow PyTorch import at startup)
-_SILERO_VAD_VERSION = None
+SILERO_VAD_VERSION = None
 
 
 def _get_silero_vad_version() -> str:
     """Get silero-vad version lazily to avoid slow startup."""
-    global _SILERO_VAD_VERSION
-    if _SILERO_VAD_VERSION is None:
+    global SILERO_VAD_VERSION
+    if SILERO_VAD_VERSION is None:
         try:
             import silero_vad
-            _SILERO_VAD_VERSION = silero_vad.__version__
+            SILERO_VAD_VERSION = silero_vad.__version__
         except (ImportError, AttributeError):
-            _SILERO_VAD_VERSION = "unknown"
-    return _SILERO_VAD_VERSION
+            SILERO_VAD_VERSION = "unknown"
+    return SILERO_VAD_VERSION
 
 
 # ============= Silero-VAD Engine Server =============
 
-class SileroVADEngineServer(BaseQualityServer):
+class SileroVADServer(BaseQualityServer):
     """
     Silero-VAD based audio analysis engine
 
@@ -425,13 +425,7 @@ class SileroVADEngineServer(BaseQualityServer):
         if self.vad_model is not None:
             logger.info("[silero-vad] Unloading VAD model")
             self.vad_model = None
-
-            # Force garbage collection
-            import gc
-            gc.collect()
-
-        self.model_loaded = False
-        self.current_model = None
+        # Note: gc.collect() and state reset are handled by base_server.py
 
     def get_package_version(self) -> str:
         """Return silero-vad package version for health endpoint"""
@@ -448,5 +442,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Create and run server
-    server = SileroVADEngineServer()
+    server = SileroVADServer()
     server.run(port=args.port, host=args.host)

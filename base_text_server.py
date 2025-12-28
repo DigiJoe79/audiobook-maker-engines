@@ -15,7 +15,6 @@ from fastapi import HTTPException
 from typing import List, Optional
 from abc import abstractmethod
 from loguru import logger
-import traceback
 import asyncio
 
 from base_server import BaseEngineServer, CamelCaseModel, ModelInfo as ModelInfo
@@ -130,7 +129,7 @@ class BaseTextServer(BaseEngineServer):
                     )
 
                 logger.info(
-                    f"📝 [{self.engine_name}] Segmenting text | "
+                    f"[{self.engine_name}] Segmenting text | "
                     f"Model: {self.current_model} | "
                     f"Language: {request.language} | "
                     f"Length: {len(request.text)} chars | "
@@ -174,13 +173,10 @@ class BaseTextServer(BaseEngineServer):
                 )
 
             except HTTPException:
+                self.status = "ready"  # HTTP errors are client errors, server is still ready
                 raise
             except Exception as e:
-                self.status = "error"
-                self.error_message = str(e)
-                logger.error(f"[{self.engine_name}] Segmentation failed: {e}")
-                logger.error(traceback.format_exc())
-                raise HTTPException(status_code=500, detail=str(e))
+                self._handle_processing_error(e, "segmentation")
 
     # ============= Text-Specific Abstract Method =============
 

@@ -38,9 +38,7 @@ class XTTSServer(BaseTTSServer):
             config_path=str(Path(__file__).parent / "engine.yaml")
         )
         # Note: self.models_dir is set by BaseEngineServer (/app/models in Docker)
-
-        # Set device after super().__init__
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        # Note: self.device property is provided by BaseEngineServer (auto-detects cuda/cpu)
 
     # XTTS v2 supported languages (all models support these)
     SUPPORTED_LANGUAGES = [
@@ -119,30 +117,8 @@ class XTTSServer(BaseTTSServer):
         parameters: Dict[str, Any]
     ) -> bytes:
         """Generate TTS audio with XTTS"""
-        from fastapi import HTTPException
-
-        if not self.model:
-            raise HTTPException(
-                status_code=503,
-                detail="Model not loaded. Call POST /load first."
-            )
-
-        # XTTS requires speaker samples for voice cloning
-        if not speaker_wav or (isinstance(speaker_wav, list) and len(speaker_wav) == 0):
-            raise HTTPException(
-                status_code=400,
-                detail="XTTS requires speaker samples for voice cloning. "
-                       "Upload samples via /samples/upload and include sample IDs in tts_speaker_wav."
-            )
-
-        # Validate text length (from engine.yaml constraints)
-        max_text_length = self._engine_config.get("constraints", {}).get("max_text_length", 250)
-        if len(text) > max_text_length:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Text too long ({len(text)} chars). XTTS max is {max_text_length} chars. "
-                       "Use text segmentation to split into smaller chunks."
-            )
+        # Note: Model loaded check, speaker cloning validation, and max_text_length
+        # validation are handled in base_tts_server.py
 
         # Resolve speaker filenames to full paths in samples_dir
         if isinstance(speaker_wav, str):
@@ -179,42 +155,22 @@ class XTTSServer(BaseTTSServer):
         top_k = int(parameters.get('top_k', 50))
         top_p = float(parameters.get('top_p', 0.85))
 
-        # Generate with CUDA OOM error handling
-        try:
-            out = self.model.inference(
-                text,
-                language,
-                gpt_cond_latent=gpt_cond_latent,
-                speaker_embedding=speaker_embedding,
-                temperature=temperature,
-                length_penalty=length_penalty,
-                repetition_penalty=repetition_penalty,
-                top_k=top_k,
-                top_p=top_p,
-                enable_text_splitting=False,
-                speed=speed
-            )
-        except AssertionError as e:
-            error_msg = str(e)
-            if "maximum of 400 tokens" in error_msg or "gpt_max_text_tokens" in error_msg:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Text too long for XTTS (max 400 tokens). "
-                           "Use text segmentation to split into smaller chunks."
-                )
-            raise  # Re-raise other AssertionErrors
-        except RuntimeError as e:
-            error_msg = str(e).lower()
-            if "out of memory" in error_msg or "cuda" in error_msg:
-                logger.error(f"[{self.engine_name}] CUDA OOM during generation: {e}")
-                # Try to recover GPU memory
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                raise HTTPException(
-                    status_code=503,
-                    detail="[TTS_GPU_OOM]GPU out of memory. Try shorter text or restart engine."
-                )
-            raise  # Re-raise other RuntimeErrors
+        # Generate audio
+        # Note: max_text_length (250 chars) ensures we stay under XTTS's 400 token limit
+        # GPU OOM handling is done in base_tts_server.py
+        out = self.model.inference(
+            text,
+            language,
+            gpt_cond_latent=gpt_cond_latent,
+            speaker_embedding=speaker_embedding,
+            temperature=temperature,
+            length_penalty=length_penalty,
+            repetition_penalty=repetition_penalty,
+            top_k=top_k,
+            top_p=top_p,
+            enable_text_splitting=False,
+            speed=speed
+        )
 
         # Convert to WAV bytes
         buffer = io.BytesIO()
@@ -229,9 +185,7 @@ class XTTSServer(BaseTTSServer):
 
     def unload_model(self) -> None:
         """Unload model and free VRAM"""
-        had_model = self.model is not None
-
-        # 1. Clear latents cache with explicit tensor deletion
+        # Clear latents cache with explicit tensor deletion
         if hasattr(self, 'latents_cache') and self.latents_cache:
             for key in list(self.latents_cache.keys()):
                 latents = self.latents_cache.get(key)
@@ -239,20 +193,13 @@ class XTTSServer(BaseTTSServer):
                     del latents
             self.latents_cache.clear()
 
-        # 2. Explicitly delete model before setting to None
+        # Delete model
         if self.model is not None:
             del self.model
             self.model = None
+            logger.info(f"[{self.engine_name}] Model unloaded")
 
-        # 3. Force GPU memory cleanup
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-
-        self.current_model = None
-
-        if had_model:
-            logger.info(f"[{self.engine_name}] Model unloaded and GPU memory cleared")
+        # Note: GPU cleanup, gc.collect(), and state reset are handled by base_server.py
 
     def get_package_version(self) -> str:
         """Return TTS package version for health endpoint"""

@@ -24,6 +24,7 @@ import asyncio
 import os
 import yaml
 from concurrent.futures import ThreadPoolExecutor
+import gc
 
 
 # ============= Configure Loguru (same format as main backend) =============
@@ -240,7 +241,7 @@ class BaseEngineServer(ABC):
         self.error_message = None
         self.shutdown_requested = False
         self.server: Optional[uvicorn.Server] = None  # Server reference for graceful shutdown
-        self.device = "cpu"  # Default device, subclasses can override (e.g., "cuda")
+        # Note: self.device is a property that auto-detects cuda/cpu
 
         # Determine base path (Docker: /app, Subprocess: engine directory)
         if Path("/app").exists() and Path("/app/server.py").exists():
@@ -298,8 +299,11 @@ class BaseEngineServer(ABC):
                     if self.model_loaded:
                         logger.info(f"[{self.engine_name}] Unloading current model before hotswap...")
                         await loop.run_in_executor(self._executor, self.unload_model)
+                        # Cleanup is centralized here - engines don't need to do this
                         self.model_loaded = False
                         self.current_model = None
+                        self._cleanup_gpu_memory()
+                        gc.collect()
 
                     # Call engine-specific implementation in thread pool
                     # This prevents blocking the event loop during long loads
@@ -342,17 +346,27 @@ class BaseEngineServer(ABC):
         @self.app.get("/health", response_model=HealthResponse)
         async def health_endpoint():
             """Health check"""
-            gpu_used, gpu_total = self._get_gpu_memory()
-            return HealthResponse(
-                status=self.status,
-                engine_model_loaded=self.model_loaded,
-                current_engine_model=self.current_model,
-                device=self.device,
-                error=self.error_message,
-                package_version=self.get_package_version(),
-                gpu_memory_used_mb=gpu_used,
-                gpu_memory_total_mb=gpu_total
-            )
+            try:
+                gpu_used, gpu_total = self._get_gpu_memory()
+                return HealthResponse(
+                    status=self.status,
+                    engine_model_loaded=self.model_loaded,
+                    current_engine_model=self.current_model,
+                    device=self.device,
+                    error=self.error_message,
+                    package_version=self.get_package_version(),
+                    gpu_memory_used_mb=gpu_used,
+                    gpu_memory_total_mb=gpu_total
+                )
+            except Exception as e:
+                logger.error(f"[{self.engine_name}] Health check failed: {e}")
+                return HealthResponse(
+                    status="error",
+                    engine_model_loaded=self.model_loaded,
+                    current_engine_model=self.current_model,
+                    device=self.device,
+                    error=str(e)
+                )
 
         @self.app.get("/info", response_model=EngineInfoResponse)
         async def info_endpoint():
@@ -362,7 +376,11 @@ class BaseEngineServer(ABC):
             Used for Docker discovery - the app queries this endpoint to get
             engine configuration without requiring manual input.
             """
-            return self._build_engine_info()
+            try:
+                return self._build_engine_info()
+            except Exception as e:
+                logger.error(f"[{self.engine_name}] Failed to build engine info: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to load engine metadata: {e}")
 
         @self.app.post("/shutdown", response_model=ShutdownResponse)
         async def shutdown_endpoint():
@@ -374,6 +392,10 @@ class BaseEngineServer(ABC):
             async with self._model_lock:
                 try:
                     self.unload_model()
+                    self.model_loaded = False
+                    self.current_model = None
+                    self._cleanup_gpu_memory()
+                    gc.collect()
                 except Exception as e:
                     logger.error(f"[{self.engine_name}] Error during unload: {e}")
 
@@ -578,6 +600,79 @@ class BaseEngineServer(ABC):
             pass
 
         return None, None
+
+    # ============= Error Handling Helpers =============
+
+    def _cleanup_gpu_memory(self) -> None:
+        """
+        Attempt to free GPU memory after OOM error.
+
+        Called automatically when GPU OOM is detected during processing.
+        Subclasses with GPU support can override for engine-specific cleanup.
+        """
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                logger.debug(f"[{self.engine_name}] GPU memory cache cleared")
+        except ImportError:
+            pass  # torch not available, no GPU cleanup needed
+        except Exception as e:
+            logger.warning(f"[{self.engine_name}] GPU cleanup failed: {e}")
+
+    @property
+    def device(self) -> str:
+        """
+        Detect available compute device (cuda or cpu).
+
+        Caches the result after first call for performance.
+        GPU engines can use this instead of manually checking torch.cuda.is_available().
+
+        Returns:
+            "cuda" if GPU available, "cpu" otherwise
+        """
+        if not hasattr(self, '_device'):
+            try:
+                import torch
+                self._device = "cuda" if torch.cuda.is_available() else "cpu"
+            except ImportError:
+                self._device = "cpu"
+        return self._device
+
+    def _handle_processing_error(self, e: Exception, operation: str) -> None:
+        """
+        Centralized error handling for processing endpoints (generate/analyze/segment).
+
+        Handles:
+        - GPU OOM errors (RuntimeError with "out of memory")
+        - General exceptions
+
+        Args:
+            e: The exception that was raised
+            operation: Name of the operation for logging (e.g., "generation", "analysis")
+
+        Raises:
+            HTTPException: Always raises with appropriate status code
+        """
+        if isinstance(e, RuntimeError):
+            error_msg = str(e).lower()
+            if "out of memory" in error_msg or "cuda" in error_msg:
+                self.status = "error"
+                self.error_message = "GPU out of memory"
+                logger.error(f"[{self.engine_name}] GPU OOM during {operation}: {e}")
+                self._cleanup_gpu_memory()
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"[GPU_OOM]GPU out of memory. Try smaller input or restart engine."
+                )
+
+        # General error handling
+        self.status = "error"
+        self.error_message = str(e)
+        logger.error(f"[{self.engine_name}] {operation.capitalize()} failed: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
     # ============= Server Lifecycle =============
 

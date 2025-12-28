@@ -37,7 +37,7 @@ class DebugTextServer(BaseTextServer):
         # No actual model needed
         self.model = None
         self.default_model = "default"
-        self.device = "cpu"
+        # Note: self.device property is provided by BaseEngineServer (auto-detects cuda/cpu)
 
         logger.info("[debug-text] Debug Text Engine initialized (punctuation-based segmentation)")
 
@@ -266,8 +266,7 @@ class DebugTextServer(BaseTextServer):
         """Free resources (nothing to free for debug engine)."""
         logger.info("[debug-text] Unloading model")
         self.model = None
-        self.current_model = None
-        self.model_loaded = False
+        # Note: gc.collect() and state reset are handled by base_server.py
 
     def get_available_models(self) -> List[ModelInfo]:
         """Return available debug models by scanning models directory."""

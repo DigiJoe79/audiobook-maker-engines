@@ -33,6 +33,7 @@ logging.getLogger('perth').setLevel(logging.ERROR)
 # Add parent directory to path to import base_server
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from base_tts_server import BaseTTSServer, ModelInfo  # noqa: E402
+from loguru import logger  # noqa: E402
 
 # Import Chatterbox (after warnings/logging suppression)
 import contextlib  # noqa: E402
@@ -70,13 +71,10 @@ class ChatterboxServer(BaseTTSServer):
 
         super().__init__(
             engine_name="chatterbox",
-            display_name="Chatterbox"
+            display_name="Chatterbox",
+            config_path=str(Path(__file__).parent / "engine.yaml")
         )
-
-        # Set device after super().__init__
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        from loguru import logger
+        # Note: self.device property is provided by BaseEngineServer (auto-detects cuda/cpu)
         logger.info(f"[chatterbox] Running on device: {self.device}")
 
     # Chatterbox supported languages (23 languages)
@@ -97,8 +95,6 @@ class ChatterboxServer(BaseTTSServer):
 
     def load_model(self, model_name: str) -> None:
         """Load Chatterbox TTS model"""
-        from loguru import logger
-
         from fastapi import HTTPException
 
         # Validate model name (Chatterbox only supports 'multilingual' pretrained model)
@@ -136,31 +132,8 @@ class ChatterboxServer(BaseTTSServer):
         parameters: Dict[str, Any]
     ) -> bytes:
         """Generate TTS audio using Chatterbox"""
-        from loguru import logger
-        from fastapi import HTTPException
-
-        if self.model is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Model not loaded. Call POST /load first."
-            )
-
-        # Validate text length (from engine.yaml constraints)
-        max_text_length = self._engine_config.get("constraints", {}).get("max_text_length", 300)
-        if len(text) > max_text_length:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Text too long ({len(text)} chars). Chatterbox max is {max_text_length} chars. "
-                       "Use text segmentation to split into smaller chunks."
-            )
-
-        # Chatterbox supports speaker cloning - validate if samples provided
-        if not speaker_wav or (isinstance(speaker_wav, list) and len(speaker_wav) == 0):
-            raise HTTPException(
-                status_code=400,
-                detail="Chatterbox requires speaker samples for voice cloning. "
-                       "Upload samples via /samples/upload and include sample IDs in tts_speaker_wav."
-            )
+        # Note: Model loaded check, speaker cloning validation, and max_text_length
+        # validation are handled in base_tts_server.py
 
         # Extract parameters with defaults
         exaggeration = parameters.get("exaggeration", 0.5)
@@ -225,17 +198,11 @@ class ChatterboxServer(BaseTTSServer):
 
     def unload_model(self) -> None:
         """Free resources"""
-        from loguru import logger
-
         if self.model is not None:
             logger.info("[chatterbox] Unloading model...")
-            # Explicit cleanup for GPU memory
             del self.model
             self.model = None
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
-                torch.cuda.empty_cache()
-            gc.collect()
+            # Note: GPU cleanup, gc.collect(), and state reset are handled by base_server.py
 
     def get_package_version(self) -> str:
         """Return Chatterbox package version for health endpoint"""

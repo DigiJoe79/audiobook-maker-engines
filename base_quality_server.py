@@ -19,7 +19,6 @@ from fastapi import HTTPException
 from typing import Dict, Any, List, Optional
 from abc import abstractmethod
 from loguru import logger
-import traceback
 import base64
 import asyncio
 
@@ -304,13 +303,10 @@ class BaseQualityServer(BaseEngineServer):
                 )
 
             except HTTPException:
+                self.status = "ready"  # HTTP errors are client errors, server is still ready
                 raise
             except Exception as e:
-                self.status = "error"
-                self.error_message = str(e)
-                logger.error(f"[{self.engine_name}] Analysis failed: {e}")
-                logger.error(traceback.format_exc())
-                raise HTTPException(status_code=500, detail=str(e))
+                self._handle_processing_error(e, "analysis")
 
     # ============= Quality-Specific Abstract Method =============
 

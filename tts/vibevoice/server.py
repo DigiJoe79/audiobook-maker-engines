@@ -24,7 +24,6 @@ import io
 import warnings
 import logging
 import os
-import gc
 import numpy as np
 import torch
 
@@ -43,6 +42,7 @@ logging.getLogger('diffusers').setLevel(logging.ERROR)
 # Add parent directory to path to import base_server
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from base_tts_server import BaseTTSServer, ModelInfo  # noqa: E402
+from loguru import logger  # noqa: E402
 
 
 def normalize_audio(audio_array: np.ndarray, target_db: float = -3.0) -> np.ndarray:
@@ -110,13 +110,11 @@ class VibeVoiceServer(BaseTTSServer):
         )
 
         # Set device after super().__init__
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        # Note: self.device property is provided by BaseEngineServer (auto-detects cuda/cpu)
 
         # models_dir and external_models_dir are set by BaseTTSServer
         # - models_dir: /app/models (baked-in + symlinks to external)
         # - external_models_dir: /app/external_models (downloads persist here)
-
-        from loguru import logger
         logger.info(f"[vibevoice] Running on device: {self.device}")
         logger.info(f"[vibevoice] Models directory: {self.models_dir}")
         logger.info(f"[vibevoice] External models directory: {self.external_models_dir}")
@@ -150,8 +148,6 @@ class VibeVoiceServer(BaseTTSServer):
 
     def load_model(self, model_name: str) -> None:
         """Load VibeVoice model (1.5B or 7B)"""
-        from loguru import logger
-
         # Normalize model name (handle display names like "VibeVoice-1.5B" -> "1.5B")
         valid_models = ["1.5B", "7B"]
         normalized_name = model_name
@@ -283,31 +279,8 @@ class VibeVoiceServer(BaseTTSServer):
         parameters: Dict[str, Any]
     ) -> bytes:
         """Generate TTS audio using VibeVoice with voice cloning"""
-        from loguru import logger
-        from fastapi import HTTPException
-
-        if self.model is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Model not loaded. Call POST /load first."
-            )
-
-        # Validate text length (from engine.yaml constraints)
-        max_text_length = self._engine_config.get("constraints", {}).get("max_text_length", 5000)
-        if len(text) > max_text_length:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Text too long ({len(text)} chars). VibeVoice max is {max_text_length} chars. "
-                       "Use text segmentation to split into smaller chunks."
-            )
-
-        # VibeVoice supports speaker cloning - validate if samples provided
-        if not speaker_wav or (isinstance(speaker_wav, list) and len(speaker_wav) == 0):
-            raise HTTPException(
-                status_code=400,
-                detail="VibeVoice requires speaker samples for voice cloning. "
-                       "Upload samples via /samples/upload and include sample IDs in tts_speaker_wav."
-            )
+        # Note: Model loaded check, speaker cloning validation, and max_text_length
+        # validation are handled in base_tts_server.py
 
         # Extract parameters with defaults
         # cfg_scale: 1.3 is recommended (higher values like 2.0 can be "unhinged")
@@ -322,175 +295,155 @@ class VibeVoiceServer(BaseTTSServer):
             f"(lang={language}, cfg_scale={cfg_scale})"
         )
 
-        try:
-            # Resolve speaker filenames to full paths in samples_dir
-            # speaker_wav is now a filename (e.g., "uuid.wav") not a full path
-            voice_samples = []
-            if speaker_wav:
-                # Handle single filename or list of filenames
-                filenames = speaker_wav if isinstance(speaker_wav, list) else [speaker_wav]
-                for filename in filenames:
-                    if filename and filename.strip():
-                        full_path = self.samples_dir / filename
-                        if full_path.exists():
-                            voice_samples.append(str(full_path))
-                            logger.debug(f"[vibevoice] Using voice sample: {full_path}")
-                        else:
-                            logger.warning(f"[vibevoice] Voice sample not found: {full_path}")
+        # Resolve speaker filenames to full paths in samples_dir
+        # speaker_wav is now a filename (e.g., "uuid.wav") not a full path
+        voice_samples = []
+        if speaker_wav:
+            # Handle single filename or list of filenames
+            filenames = speaker_wav if isinstance(speaker_wav, list) else [speaker_wav]
+            for filename in filenames:
+                if filename and filename.strip():
+                    full_path = self.samples_dir / filename
+                    if full_path.exists():
+                        voice_samples.append(str(full_path))
+                        logger.debug(f"[vibevoice] Using voice sample: {full_path}")
+                    else:
+                        logger.warning(f"[vibevoice] Voice sample not found: {full_path}")
 
-            if not voice_samples:
-                logger.warning("[vibevoice] No voice samples provided, using default voice")
+        if not voice_samples:
+            logger.warning("[vibevoice] No voice samples provided, using default voice")
 
-            # VibeVoice expects text in "Speaker X: text" format
-            # Note: Newlines are already removed by SegmentRepository.create()
-            formatted_text = f"Speaker 1: {text.strip()}"
-            logger.info(f"[vibevoice] Formatted text ({len(formatted_text)} chars): {formatted_text[:200]}...")
+        # VibeVoice expects text in "Speaker X: text" format
+        # Note: Newlines are already removed by SegmentRepository.create()
+        formatted_text = f"Speaker 1: {text.strip()}"
+        logger.info(f"[vibevoice] Formatted text ({len(formatted_text)} chars): {formatted_text[:200]}...")
 
-            # Prepare inputs using processor
-            # IMPORTANT: text must be a list, and voice_samples must be wrapped in a list
-            inputs = self.processor(
-                text=[formatted_text],  # Must be a list!
-                voice_samples=[voice_samples] if voice_samples else None,
-                padding=True,
-                return_tensors="pt",
-                return_attention_mask=True,
+        # Prepare inputs using processor
+        # IMPORTANT: text must be a list, and voice_samples must be wrapped in a list
+        inputs = self.processor(
+            text=[formatted_text],  # Must be a list!
+            voice_samples=[voice_samples] if voice_samples else None,
+            padding=True,
+            return_tensors="pt",
+            return_attention_mask=True,
+        )
+
+        # Debug: log what the processor produced
+        logger.info(f"[vibevoice] Processor output keys: {list(inputs.keys())}")
+        for k, v in inputs.items():
+            if isinstance(v, torch.Tensor):
+                logger.info(f"[vibevoice] {k}: shape={v.shape}, dtype={v.dtype}")
+            else:
+                logger.info(f"[vibevoice] {k}: type={type(v).__name__}, len={len(v) if hasattr(v, '__len__') else 'N/A'}")
+
+        # Separate tensor inputs from non-tensor metadata
+        device = next(self.model.parameters()).device
+        tensor_inputs = {}
+        for k, v in inputs.items():
+            if isinstance(v, torch.Tensor):
+                tensor_inputs[k] = v.to(device)
+            else:
+                logger.debug(f"[vibevoice] Skipping non-tensor input: {k} (type: {type(v).__name__})")
+
+        # Generate audio with voice cloning (is_prefill=True enables cloning)
+        # max_new_tokens controls how much audio is generated
+        # VibeVoice uses 7.5 Hz frame rate, so 7.5 tokens = 1 second of audio
+        # Default to 4096 tokens (~9 minutes) to allow long-form generation
+        max_tokens = int(parameters.get("max_new_tokens", 4096))
+
+        with torch.no_grad():
+            # Build generation config
+            # Default: do_sample=False for stable, deterministic output
+            gen_config = {'do_sample': do_sample}
+            if do_sample:
+                gen_config['temperature'] = temperature
+                gen_config['top_p'] = top_p
+
+            outputs = self.model.generate(
+                **tensor_inputs,
+                cfg_scale=cfg_scale,
+                tokenizer=self.processor.tokenizer,
+                max_new_tokens=max_tokens,
+                generation_config=gen_config,
+                verbose=True,
+                is_prefill=len(voice_samples) > 0,  # Enable voice cloning if samples provided
             )
 
-            # Debug: log what the processor produced
-            logger.info(f"[vibevoice] Processor output keys: {list(inputs.keys())}")
-            for k, v in inputs.items():
-                if isinstance(v, torch.Tensor):
-                    logger.info(f"[vibevoice] {k}: shape={v.shape}, dtype={v.dtype}")
-                else:
-                    logger.info(f"[vibevoice] {k}: type={type(v).__name__}, len={len(v) if hasattr(v, '__len__') else 'N/A'}")
+        # Extract audio from outputs
+        logger.info(f"[vibevoice] Output type: {type(outputs)}")
+        # Try all ways to inspect the object
+        if hasattr(outputs, '__dict__'):
+            logger.info(f"[vibevoice] Output __dict__: {list(outputs.__dict__.keys())}")
+        if hasattr(outputs, '__slots__'):
+            logger.info(f"[vibevoice] Output __slots__: {outputs.__slots__}")
+        # List all non-private attributes
+        all_attrs = [a for a in dir(outputs) if not a.startswith('_')]
+        logger.info(f"[vibevoice] Output public attrs: {all_attrs}")
 
-            # Separate tensor inputs from non-tensor metadata
-            device = next(self.model.parameters()).device
-            tensor_inputs = {}
-            for k, v in inputs.items():
-                if isinstance(v, torch.Tensor):
-                    tensor_inputs[k] = v.to(device)
-                else:
-                    logger.debug(f"[vibevoice] Skipping non-tensor input: {k} (type: {type(v).__name__})")
+        # Check if max step was reached (indicates truncation)
+        if hasattr(outputs, 'reach_max_step_sample'):
+            logger.info(f"[vibevoice] reach_max_step_sample: {outputs.reach_max_step_sample}")
+            if outputs.reach_max_step_sample:
+                logger.warning("[vibevoice] Audio generation hit max token limit - output may be truncated!")
 
-            # Generate audio with voice cloning (is_prefill=True enables cloning)
-            # max_new_tokens controls how much audio is generated
-            # VibeVoice uses 7.5 Hz frame rate, so 7.5 tokens = 1 second of audio
-            # Default to 4096 tokens (~9 minutes) to allow long-form generation
-            max_tokens = int(parameters.get("max_new_tokens", 4096))
+        if hasattr(outputs, 'speech_outputs'):
+            audio_data = outputs.speech_outputs
+            logger.info(f"[vibevoice] Found outputs.speech_outputs, type: {type(audio_data)}")
+            if isinstance(audio_data, (list, tuple)) and len(audio_data) > 0:
+                logger.info(f"[vibevoice] speech_outputs is list/tuple with {len(audio_data)} elements, first type: {type(audio_data[0])}")
+        elif hasattr(outputs, 'audio'):
+            audio_data = outputs.audio
+            logger.debug(f"[vibevoice] Found outputs.audio, type: {type(audio_data)}")
+        elif isinstance(outputs, dict) and 'speech_outputs' in outputs:
+            audio_data = outputs['speech_outputs']
+            logger.debug(f"[vibevoice] Found outputs['speech_outputs'], type: {type(audio_data)}")
+        elif isinstance(outputs, dict) and 'audio' in outputs:
+            audio_data = outputs['audio']
+            logger.debug(f"[vibevoice] Found outputs['audio'], type: {type(audio_data)}")
+        elif isinstance(outputs, torch.Tensor):
+            audio_data = outputs
+            logger.debug(f"[vibevoice] Output is tensor, shape: {audio_data.shape}")
+        elif isinstance(outputs, tuple) and len(outputs) > 0:
+            # Some models return (audio, sample_rate) or similar tuple
+            audio_data = outputs[0]
+            logger.debug(f"[vibevoice] Output is tuple, first element type: {type(audio_data)}")
+        else:
+            audio_data = outputs
+            logger.debug("[vibevoice] Using raw output")
 
-            with torch.no_grad():
-                # Build generation config
-                # Default: do_sample=False for stable, deterministic output
-                gen_config = {'do_sample': do_sample}
-                if do_sample:
-                    gen_config['temperature'] = temperature
-                    gen_config['top_p'] = top_p
-
-                outputs = self.model.generate(
-                    **tensor_inputs,
-                    cfg_scale=cfg_scale,
-                    tokenizer=self.processor.tokenizer,
-                    max_new_tokens=max_tokens,
-                    generation_config=gen_config,
-                    verbose=True,
-                    is_prefill=len(voice_samples) > 0,  # Enable voice cloning if samples provided
-                )
-
-            # Extract audio from outputs
-            logger.info(f"[vibevoice] Output type: {type(outputs)}")
-            # Try all ways to inspect the object
-            if hasattr(outputs, '__dict__'):
-                logger.info(f"[vibevoice] Output __dict__: {list(outputs.__dict__.keys())}")
-            if hasattr(outputs, '__slots__'):
-                logger.info(f"[vibevoice] Output __slots__: {outputs.__slots__}")
-            # List all non-private attributes
-            all_attrs = [a for a in dir(outputs) if not a.startswith('_')]
-            logger.info(f"[vibevoice] Output public attrs: {all_attrs}")
-
-            # Check if max step was reached (indicates truncation)
-            if hasattr(outputs, 'reach_max_step_sample'):
-                logger.info(f"[vibevoice] reach_max_step_sample: {outputs.reach_max_step_sample}")
-                if outputs.reach_max_step_sample:
-                    logger.warning("[vibevoice] Audio generation hit max token limit - output may be truncated!")
-
-            if hasattr(outputs, 'speech_outputs'):
-                audio_data = outputs.speech_outputs
-                logger.info(f"[vibevoice] Found outputs.speech_outputs, type: {type(audio_data)}")
-                if isinstance(audio_data, (list, tuple)) and len(audio_data) > 0:
-                    logger.info(f"[vibevoice] speech_outputs is list/tuple with {len(audio_data)} elements, first type: {type(audio_data[0])}")
-            elif hasattr(outputs, 'audio'):
-                audio_data = outputs.audio
-                logger.debug(f"[vibevoice] Found outputs.audio, type: {type(audio_data)}")
-            elif isinstance(outputs, dict) and 'speech_outputs' in outputs:
-                audio_data = outputs['speech_outputs']
-                logger.debug(f"[vibevoice] Found outputs['speech_outputs'], type: {type(audio_data)}")
-            elif isinstance(outputs, dict) and 'audio' in outputs:
-                audio_data = outputs['audio']
-                logger.debug(f"[vibevoice] Found outputs['audio'], type: {type(audio_data)}")
-            elif isinstance(outputs, torch.Tensor):
-                audio_data = outputs
-                logger.debug(f"[vibevoice] Output is tensor, shape: {audio_data.shape}")
-            elif isinstance(outputs, tuple) and len(outputs) > 0:
-                # Some models return (audio, sample_rate) or similar tuple
-                audio_data = outputs[0]
-                logger.debug(f"[vibevoice] Output is tuple, first element type: {type(audio_data)}")
+        # Convert to numpy array
+        if isinstance(audio_data, torch.Tensor):
+            audio_array = audio_data.squeeze().cpu().float().numpy()
+            logger.debug(f"[vibevoice] Tensor -> numpy, shape: {audio_array.shape}, dtype: {audio_array.dtype}")
+        elif isinstance(audio_data, np.ndarray):
+            audio_array = audio_data.squeeze()
+            logger.debug(f"[vibevoice] Already numpy, shape: {audio_array.shape}, dtype: {audio_array.dtype}")
+        elif isinstance(audio_data, list):
+            # Handle list of arrays or nested structure
+            if len(audio_data) > 0 and isinstance(audio_data[0], (torch.Tensor, np.ndarray)):
+                audio_array = audio_data[0]
+                if isinstance(audio_array, torch.Tensor):
+                    audio_array = audio_array.squeeze().cpu().float().numpy()
+                logger.debug(f"[vibevoice] List of tensors/arrays, first shape: {audio_array.shape}")
             else:
-                audio_data = outputs
-                logger.debug("[vibevoice] Using raw output")
-
-            # Convert to numpy array
-            if isinstance(audio_data, torch.Tensor):
-                audio_array = audio_data.squeeze().cpu().float().numpy()
-                logger.debug(f"[vibevoice] Tensor -> numpy, shape: {audio_array.shape}, dtype: {audio_array.dtype}")
-            elif isinstance(audio_data, np.ndarray):
-                audio_array = audio_data.squeeze()
-                logger.debug(f"[vibevoice] Already numpy, shape: {audio_array.shape}, dtype: {audio_array.dtype}")
-            elif isinstance(audio_data, list):
-                # Handle list of arrays or nested structure
-                if len(audio_data) > 0 and isinstance(audio_data[0], (torch.Tensor, np.ndarray)):
-                    audio_array = audio_data[0]
-                    if isinstance(audio_array, torch.Tensor):
-                        audio_array = audio_array.squeeze().cpu().float().numpy()
-                    logger.debug(f"[vibevoice] List of tensors/arrays, first shape: {audio_array.shape}")
-                else:
-                    audio_array = np.array(audio_data, dtype=np.float32).squeeze()
-                    logger.debug(f"[vibevoice] List -> numpy, shape: {audio_array.shape}")
-            else:
-                logger.warning(f"[vibevoice] Unknown audio format: {type(audio_data)}")
                 audio_array = np.array(audio_data, dtype=np.float32).squeeze()
+                logger.debug(f"[vibevoice] List -> numpy, shape: {audio_array.shape}")
+        else:
+            logger.warning(f"[vibevoice] Unknown audio format: {type(audio_data)}")
+            audio_array = np.array(audio_data, dtype=np.float32).squeeze()
 
-            # Log audio duration
-            audio_duration = len(audio_array) / self.SAMPLE_RATE
-            logger.info(f"[vibevoice] Generated audio: {len(audio_array)} samples, {audio_duration:.2f}s at {self.SAMPLE_RATE}Hz")
+        # Log audio duration
+        audio_duration = len(audio_array) / self.SAMPLE_RATE
+        logger.info(f"[vibevoice] Generated audio: {len(audio_array)} samples, {audio_duration:.2f}s at {self.SAMPLE_RATE}Hz")
 
-            # Convert to WAV bytes
-            wav_bytes = audio_to_wav_bytes(audio_array, self.SAMPLE_RATE)
+        # Convert to WAV bytes
+        wav_bytes = audio_to_wav_bytes(audio_array, self.SAMPLE_RATE)
 
-            logger.debug(f"[vibevoice] Generated {len(wav_bytes)} bytes")
-            return wav_bytes
-
-        except RuntimeError as e:
-            # Handle GPU OOM
-            if "out of memory" in str(e).lower():
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                logger.error(f"[vibevoice] GPU out of memory: {e}")
-                raise HTTPException(
-                    status_code=503,
-                    detail="[TTS_GPU_OOM]GPU out of memory. Try shorter text or use smaller model."
-                )
-            raise
-        except Exception as e:
-            logger.error(f"[vibevoice] Generation failed: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            raise
+        logger.debug(f"[vibevoice] Generated {len(wav_bytes)} bytes")
+        return wav_bytes
 
     def unload_model(self) -> None:
         """Free resources and GPU memory"""
-        from loguru import logger
-
         if self.model is not None or self.processor is not None:
             logger.info("[vibevoice] Unloading model...")
 
@@ -504,15 +457,7 @@ class VibeVoiceServer(BaseTTSServer):
                 del self.processor
                 self.processor = None
 
-            # GPU cleanup
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
-                torch.cuda.empty_cache()
-
-            # Force garbage collection
-            gc.collect()
-
-            logger.info("[vibevoice] Model unloaded")
+            # Note: GPU cleanup, gc.collect(), and state reset are handled by base_server.py
 
     def get_package_version(self) -> str:
         """Return VibeVoice package version for health endpoint"""

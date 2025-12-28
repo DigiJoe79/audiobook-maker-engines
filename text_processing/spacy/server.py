@@ -122,7 +122,7 @@ class SpacyServer(BaseTextServer):
 
         # Use engine config loaded by base class
         self.config = self._engine_config
-        self.device = self.config.get("device", "cpu")
+        # Note: self.device property is provided by BaseEngineServer (spacy is CPU-only)
         self.model_tier = self.config.get("model_tier", "sm")
         self.models_mapping = self.config.get("spacy_models", {})
 

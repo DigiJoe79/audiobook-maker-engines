@@ -41,7 +41,7 @@ class DebugTTSServer(BaseTTSServer):
         # No actual model needed
         self.model = None
         self.default_model = "default"
-        self.device = "cpu"
+        # Note: self.device property is provided by BaseEngineServer (auto-detects cuda/cpu)
 
         logger.info("[debug-tts] Debug TTS Engine initialized (test audio generator)")
 
@@ -104,13 +104,7 @@ class DebugTTSServer(BaseTTSServer):
         Returns:
             WAV audio as bytes
         """
-        from fastapi import HTTPException
-
-        if not self.model_loaded:
-            raise HTTPException(
-                status_code=503,
-                detail="Model not loaded. Call POST /load first."
-            )
+        # Note: Model loaded check is handled by base_tts_server.py
 
         # Calculate duration based on text length
         # Assume ~10 characters per second of speech (typical speaking rate)
@@ -208,8 +202,7 @@ class DebugTTSServer(BaseTTSServer):
         """Free resources (nothing to free for debug engine)."""
         logger.info("[debug-tts] Unloading model")
         self.model = None
-        self.current_model = None
-        self.model_loaded = False
+        # Note: gc.collect() and state reset are handled by base_server.py
 
     def get_available_models(self) -> List[ModelInfo]:
         """

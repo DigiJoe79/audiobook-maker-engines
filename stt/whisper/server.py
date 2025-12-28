@@ -233,8 +233,7 @@ class WhisperServer(BaseQualityServer):
         # Use engine config loaded by base class
         self.config = self._engine_config
 
-        # Override device detection
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        # Note: self.device property is provided by BaseEngineServer (auto-detects cuda/cpu)
 
         # Whisper model
         self.whisper_model: Optional[Any] = None
@@ -304,12 +303,8 @@ class WhisperServer(BaseQualityServer):
         if self.whisper_model is not None:
             del self.whisper_model
             self.whisper_model = None
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
             logger.info("[whisper] Model unloaded")
-
-        self.current_model = None
-        self.model_loaded = False
+        # Note: GPU cleanup, gc.collect(), and state reset are handled by base_server.py
 
     def get_package_version(self) -> str:
         """Return whisper package version for health endpoint"""

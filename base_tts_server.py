@@ -17,7 +17,6 @@ from typing import Dict, Any, Union, List, Optional
 from pathlib import Path
 from abc import abstractmethod
 from loguru import logger
-import traceback
 import asyncio
 
 from base_server import BaseEngineServer, CamelCaseModel, ModelInfo as ModelInfo
@@ -95,6 +94,88 @@ class BaseTTSServer(BaseEngineServer):
 
         logger.info(f"[{self.engine_name}] BaseTTSServer initialized")
 
+    def _validate_sample_id(self, sample_id: str) -> Path:
+        """
+        Validate sample ID format and return safe path.
+
+        Args:
+            sample_id: Sample identifier (UUID or filename without extension)
+
+        Returns:
+            Safe Path object within samples_dir
+
+        Raises:
+            HTTPException: If sample_id is invalid or path escapes samples_dir
+        """
+        # Format validation: only alphanumeric, dash, underscore, dot allowed
+        if not sample_id or not all(c.isalnum() or c in '-_.' for c in sample_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid sample ID format: {sample_id}"
+            )
+
+        # Build path and verify it stays within samples_dir
+        sample_path = self.samples_dir / f"{sample_id}.wav"
+        try:
+            resolved = sample_path.resolve()
+            samples_resolved = self.samples_dir.resolve()
+            if not str(resolved).startswith(str(samples_resolved) + "/") and resolved != samples_resolved:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid sample path"
+                )
+        except (OSError, RuntimeError):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid sample path"
+            )
+
+        return sample_path
+
+    def _validate_speaker_wav(self, filename: str) -> Path:
+        """
+        Validate speaker wav filename and return safe path.
+
+        Args:
+            filename: Speaker sample filename (with .wav extension)
+
+        Returns:
+            Safe Path object within samples_dir
+
+        Raises:
+            HTTPException: If filename is invalid or path escapes samples_dir
+        """
+        if not filename or not filename.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Empty speaker filename"
+            )
+
+        # Format validation: only alphanumeric, dash, underscore, dot allowed
+        if not all(c.isalnum() or c in '-_.' for c in filename):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid speaker filename format: {filename}"
+            )
+
+        # Build path and verify it stays within samples_dir
+        sample_path = self.samples_dir / filename
+        try:
+            resolved = sample_path.resolve()
+            samples_resolved = self.samples_dir.resolve()
+            if not str(resolved).startswith(str(samples_resolved) + "/") and resolved != samples_resolved:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid speaker path"
+                )
+        except (OSError, RuntimeError):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid speaker path"
+            )
+
+        return sample_path
+
     def _setup_generate_route(self):
         """Setup TTS-specific /generate endpoint"""
 
@@ -120,6 +201,16 @@ class BaseTTSServer(BaseEngineServer):
                 if not request.language or not request.language.strip():
                     raise HTTPException(status_code=400, detail="Language cannot be empty")
 
+                # Validate text length (from engine.yaml constraints)
+                max_text_length = self._engine_config.get("constraints", {}).get("max_text_length")
+                if max_text_length and len(request.text) > max_text_length:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Text too long ({len(request.text)} chars). "
+                               f"{self.display_name} max is {max_text_length} chars. "
+                               "Use text segmentation to split into smaller chunks."
+                    )
+
                 # Validate speaker samples exist (if provided)
                 if request.tts_speaker_wav:
                     samples_to_check = (
@@ -128,12 +219,30 @@ class BaseTTSServer(BaseEngineServer):
                     )
                     for sample in samples_to_check:
                         if sample and sample.strip():
-                            sample_path = self.samples_dir / sample
+                            # Validate filename format and path
+                            sample_path = self._validate_speaker_wav(sample)
                             if not sample_path.exists():
                                 raise HTTPException(
                                     status_code=404,
                                     detail=f"Speaker sample not found: {sample}"
                                 )
+
+                # Validate speaker samples required for cloning engines
+                supports_cloning = self._engine_config.get("capabilities", {}).get(
+                    "supports_speaker_cloning", False
+                )
+                if supports_cloning:
+                    has_samples = bool(
+                        request.tts_speaker_wav and
+                        (isinstance(request.tts_speaker_wav, str) and request.tts_speaker_wav.strip()) or
+                        (isinstance(request.tts_speaker_wav, list) and len(request.tts_speaker_wav) > 0)
+                    )
+                    if not has_samples:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"{self.display_name} requires speaker samples for voice cloning. "
+                                   "Upload samples via /samples/upload and include sample IDs in tts_speaker_wav."
+                        )
 
                 # Clear previous error state on new request
                 self.error_message = None
@@ -178,11 +287,7 @@ class BaseTTSServer(BaseEngineServer):
                 self.status = "ready"  # HTTP errors are client errors, server is still ready
                 raise
             except Exception as e:
-                self.status = "error"
-                self.error_message = str(e)
-                logger.error(f"[{self.engine_name}] Generation failed: {e}")
-                logger.error(traceback.format_exc())
-                raise HTTPException(status_code=500, detail=str(e))
+                self._handle_processing_error(e, "generation")
 
     def _setup_sample_routes(self):
         """Setup speaker sample management endpoints"""
@@ -190,33 +295,49 @@ class BaseTTSServer(BaseEngineServer):
         @self.app.post("/samples/check", response_model=SampleCheckResponse)
         async def check_samples(request: SampleCheckRequest):
             """Check which samples exist in the engine's samples directory"""
-            missing = []
-            for sample_id in request.sample_ids:
-                sample_path = self.samples_dir / f"{sample_id}.wav"
-                if not sample_path.exists():
-                    missing.append(sample_id)
+            try:
+                missing = []
+                for sample_id in request.sample_ids:
+                    # Validate sample_id format and path
+                    sample_path = self._validate_sample_id(sample_id)
+                    if not sample_path.exists():
+                        missing.append(sample_id)
 
-            logger.debug(
-                f"[{self.engine_name}] Sample check: "
-                f"{len(request.sample_ids)} requested, {len(missing)} missing"
-            )
-            return SampleCheckResponse(missing=missing)
+                logger.debug(
+                    f"[{self.engine_name}] Sample check: "
+                    f"{len(request.sample_ids)} requested, {len(missing)} missing"
+                )
+                return SampleCheckResponse(missing=missing)
+            except Exception as e:
+                logger.error(f"[{self.engine_name}] Sample check failed: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
 
         @self.app.post("/samples/upload/{sample_id}")
         async def upload_sample(sample_id: str, request: Request):
             """Upload a speaker sample to the engine's samples directory"""
-            dest = self.samples_dir / f"{sample_id}.wav"
+            try:
+                # Validate sample_id format and path
+                dest = self._validate_sample_id(sample_id)
 
-            # Read raw WAV bytes from request body
-            content = await request.body()
-            with open(dest, "wb") as f:
-                f.write(content)
+                # Read raw WAV bytes from request body
+                content = await request.body()
 
-            logger.info(
-                f"[{self.engine_name}] Sample uploaded: {sample_id}.wav "
-                f"({len(content)} bytes)"
-            )
-            return {"status": "ok", "sampleId": sample_id}
+                if not content:
+                    raise HTTPException(status_code=400, detail="Empty request body")
+
+                with open(dest, "wb") as f:
+                    f.write(content)
+
+                logger.info(
+                    f"[{self.engine_name}] Sample uploaded: {sample_id}.wav "
+                    f"({len(content)} bytes)"
+                )
+                return {"status": "ok", "sampleId": sample_id}
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"[{self.engine_name}] Sample upload failed: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
 
     # ============= TTS-Specific Abstract Method =============
 

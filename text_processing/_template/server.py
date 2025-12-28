@@ -254,12 +254,7 @@ class TemplateTextProcessor(BaseTextServer):
             self.nlp = None
 
         self.current_language = None
-        self.model_loaded = False
-        self.current_model = None
-
-        # Force garbage collection
-        import gc
-        gc.collect()
+        # Note: GPU cleanup, gc.collect(), and state reset are handled by base_server.py
 
     def get_available_models(self) -> List[ModelInfo]:
         """Return available models by scanning models directory."""
