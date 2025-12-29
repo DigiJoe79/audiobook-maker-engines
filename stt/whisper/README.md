@@ -2,8 +2,6 @@
 
 Isolated STT (Speech-to-Text) engine for audio quality analysis using OpenAI Whisper.
 
-**Location:** `backend/engines/stt/whisper/`
-
 ## Overview
 
 This is an STT service that provides:
@@ -11,7 +9,7 @@ This is an STT service that provides:
 - **Audio Quality Analysis** - Speech ratio, silence detection, clipping detection
 - **Combined Analysis** - Single endpoint for both transcription and quality checks
 
-**NOTE:** Unlike TTS engines, this service does NOT inherit from `BaseEngineServer` because it has custom STT-specific endpoints (`/analyze`, `/transcribe`) that don't fit the standard TTS model.
+This engine inherits from `BaseQualityServer` and uses the Generic Quality Format for integration with the QualityWorker system.
 
 ## Setup
 
@@ -139,10 +137,18 @@ When `qualityThresholds` is provided, the service performs:
 
 ## Integration
 
-The Whisper service is automatically discovered and managed by the main backend's STT system:
-- `backend/services/stt_manager.py` - Manages service lifecycle
-- `backend/core/stt_worker.py` - Consumes analysis results
-- `backend/api/stt.py` - Exposes STT endpoints to frontend
+The Whisper service is automatically discovered and managed by the main Audiobook Maker backend's STT system. The engine runs as an isolated Docker container or subprocess.
+
+## Testing
+
+Validate your engine with the automated test suite:
+
+```bash
+# Run full API test suite
+python scripts/test_engine.py --port 8767 --verbose
+```
+
+See [docs/engine-development-guide.md](../../docs/engine-development-guide.md) for comprehensive testing documentation.
 
 ## Python Version
 
@@ -215,3 +221,8 @@ pydantic==2.10.4
 | torchaudio | 2.9.0 | Maintenance-Mode, `torchaudio.load()`/`save()` nutzen jetzt TorchCodec |
 | numpy | 2.0.0 | C-API Änderungen, einige deprecated Funktionen entfernt |
 | pydantic | 3.0.0 | Noch nicht released, aber Pydantic v1 Support entfernt in naher Zukunft |
+
+## Documentation
+
+- [Engine Development Guide](../../docs/engine-development-guide.md) - Complete development guide
+- [Engine Server API](../../docs/engine-server-api.md) - API endpoint documentation

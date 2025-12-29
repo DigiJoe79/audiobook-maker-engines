@@ -8,8 +8,8 @@ Audio analysis engines analyze audio quality metrics like speech ratio, silence 
 
 1. **Copy template to new directory:**
    ```bash
-   cp -r backend/engines/audio_analysis/_template backend/engines/audio_analysis/my_analyzer
-   cd backend/engines/audio_analysis/my_analyzer
+   cp -r audio_analysis/_template audio_analysis/my_analyzer
+   cd audio_analysis/my_analyzer
    ```
 
 2. **Customize the template:**
@@ -63,6 +63,7 @@ Audio Analysis Engine (your server.py) extends BaseQualityServer
 | `/health` | GET | Health check, returns status |
 | `/load` | POST | Load a model (optional - some analyzers are model-free) |
 | `/models` | GET | List available models/configurations |
+| `/info` | GET | Engine metadata from engine.yaml |
 | `/shutdown` | POST | Graceful shutdown |
 
 ### Audio-Specific Endpoint (you implement)
@@ -266,43 +267,48 @@ class MyAudioAnalyzer(BaseQualityServer):
         self.current_model = model_name
 
     def unload_model(self) -> None:
-        self.model_loaded = False
-        self.current_model = None
+        # Note: model_loaded and current_model are reset by base_server.py
+        pass
 
     def get_available_models(self) -> List[ModelInfo]:
-        return [ModelInfo(name="default", display_name="Default Analyzer")]
+        return [ModelInfo(name="default", display_name="Default Analyzer", languages=[], fields=[])]
 ```
 
 ## Configuration (engine.yaml)
 
 ```yaml
-name: "my_analyzer"
+schema_version: 2
+
+name: "my-analyzer"
 display_name: "My Audio Analyzer"
-version: "1.0.0"
-type: audio
+engine_type: "audio"
+description: "My custom audio analyzer"
 
-python_version: "3.10"
-venv_path: "./venv"
+upstream:
+  name: "Original Project"
+  url: "https://github.com/..."
+  license: "MIT"
 
-# For model-free analyzers
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64"]
+    requires_gpu: false
+
 models:
   - name: "default"
     display_name: "Default Configuration"
 
-capabilities:
-  speech_detection: true
-  silence_detection: true
-  clipping_detection: true
-  volume_analysis: true
+default_model: "default"
 
-# Optional: configurable thresholds
-default_thresholds:
-  max_silence_duration_warning: 2500
-  max_silence_duration_critical: 3750
-  speech_ratio_ideal_min: 75
-  speech_ratio_ideal_max: 90
-  max_clipping_peak: 0.0
-  min_average_volume: -40.0
+capabilities:
+  supports_model_hotswap: false
+  supports_speaker_cloning: false
+  supports_streaming: false
+
+installation:
+  python_version: "3.10"
+  venv_path: "./venv"
+  requires_gpu: false
 ```
 
 ## Directory Structure
@@ -332,16 +338,40 @@ curl http://localhost:8768/health
 # Test models
 curl http://localhost:8768/models
 
+# Test load
+curl -X POST http://localhost:8768/load \
+  -H "Content-Type: application/json" \
+  -d '{"engineModelName": "default"}'
+
 # Test analyze (with base64 audio)
 curl -X POST http://localhost:8768/analyze \
   -H "Content-Type: application/json" \
   -d '{
     "audioBase64":"<base64-data>",
+    "language":"en",
     "qualityThresholds":{"speechRatioIdealMin":75}
   }'
+```
+
+### Automated API Testing
+
+Use the comprehensive test suite:
+
+```bash
+# Run full test suite
+python scripts/test_engine.py --port 8768 --verbose
+
+# Skip shutdown test during development
+python scripts/test_engine.py --port 8768 --skip-shutdown
 ```
 
 ## Examples
 
 See this working implementation:
-- `backend/engines/audio_analysis/silero-vad/` - VAD-based speech/silence detection
+- `audio_analysis/silero-vad/` - VAD-based speech/silence detection
+
+## Documentation
+
+- [Engine Development Guide](../../docs/engine-development-guide.md) - Complete development guide
+- [Engine Server API](../../docs/engine-server-api.md) - API endpoint documentation
+- [Model Management](../../docs/model-management.md) - Model handling patterns

@@ -20,7 +20,9 @@ Docker images for [Audiobook Maker](https://github.com/DigiJoe79/audiobook-maker
 
 ### Debug/Test Engines
 
-Lightweight mock engines for testing the pipeline without GPU or ML dependencies.
+Lightweight mock engines for testing the pipeline without GPU or ML dependencies. 
+
+**Note:** Debug engines are only visible in development builds (npm run dev:tauri). They are automatically hidden from the catalog in frontend production releases.
 
 | Engine | Type | Platforms | Description |
 |--------|------|-----------|-------------|

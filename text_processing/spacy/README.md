@@ -14,12 +14,12 @@ The spaCy text processing engine provides intelligent text segmentation for audi
 
 ### Key Features
 
-- ✅ **Intelligent Sentence Segmentation** - Uses spaCy's trained models for accurate sentence detection
-- ✅ **Multi-Language Support** - 11 languages (de, en, es, fr, it, nl, pl, pt, ru, zh, ja)
-- ✅ **Max Length Constraint** - Respects maximum segment length (default: 250 chars)
-- ✅ **Oversized Sentence Marking** - Sentences exceeding max length marked as "failed" for manual review
-- ✅ **Performance Optimized** - Disables unnecessary NLP components (NER, etc.)
-- ✅ **Model Hotswap** - Switch between languages without restart
+- **Intelligent Sentence Segmentation** - Uses spaCy's trained models for accurate sentence detection
+- **Multi-Language Support** - 11 languages (de, en, es, fr, it, nl, pl, pt, ru, zh, ja)
+- **Max Length Constraint** - Respects maximum segment length (default: 250 chars)
+- **Oversized Sentence Marking** - Sentences exceeding max length marked as "failed" for manual review
+- **Performance Optimized** - Disables unnecessary NLP components (NER, etc.)
+- **Model Hotswap** - Switch between languages without restart
 
 ---
 
@@ -46,14 +46,14 @@ The spaCy text processing engine provides intelligent text segmentation for audi
 ### Windows
 
 ```bat
-cd backend/engines/text_processing/spacy
+cd text_processing/spacy
 setup.bat
 ```
 
 ### Linux/Mac
 
 ```bash
-cd backend/engines/text_processing/spacy
+cd text_processing/spacy
 chmod +x setup.sh
 ./setup.sh
 ```
@@ -221,6 +221,20 @@ python -m spacy download es_core_news_md  # Spanish
 | 3.8.8+ | 3.10-3.14 | 2.x |
 
 ---
+
+## Testing
+
+Validate your engine with the automated test suite:
+
+```bash
+# Run full API test suite
+python scripts/test_engine.py --port 8772 --verbose
+```
+
+## Documentation
+
+- [Engine Development Guide](../../docs/engine-development-guide.md) - Complete development guide
+- [Engine Server API](../../docs/engine-server-api.md) - API endpoint documentation
 
 ## License
 

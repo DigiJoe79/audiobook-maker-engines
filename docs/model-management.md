@@ -43,25 +43,37 @@ The generic entrypoint script (`scripts/docker-entrypoint.sh`) handles symlink c
 
 ```bash
 #!/bin/bash
+set -e
+
 MODELS_DIR="/app/models"
 EXTERNAL_DIR="/app/external_models"
 
+# Ensure models directory exists
 mkdir -p "$MODELS_DIR"
 
+# Create symlinks for external models (files and directories)
 if [ -d "$EXTERNAL_DIR" ]; then
     for item in "$EXTERNAL_DIR"/*; do
-        [ -e "$item" ] || continue
+        [ -e "$item" ] || continue  # Skip if no matches
 
         item_name=$(basename "$item")
         link_path="$MODELS_DIR/$item_name"
 
-        if [ ! -e "$link_path" ]; then
+        # Skip if already exists (baked-in takes precedence)
+        if [ -e "$link_path" ]; then
+            echo "[entrypoint] Model '$item_name' already exists, skipping"
+        else
             ln -s "$item" "$link_path"
-            echo "[entrypoint] Linked: $item_name"
+            echo "[entrypoint] Linked external model: $item_name"
         fi
     done
 fi
 
+# List available models
+echo "[entrypoint] Available models in $MODELS_DIR:"
+ls -la "$MODELS_DIR" 2>/dev/null || echo "  (empty)"
+
+# Execute the main command
 exec "$@"
 ```
 
@@ -85,7 +97,7 @@ CMD ["sh", "-c", "python server.py --port ${PORT:-8766} --host 0.0.0.0"]
 
 ## .dockerignore Configuration
 
-The root `.dockerignore` excludes all `**/models/` directories by default (models are typically mounted as volumes). For engines with baked-in models, add an exception:
+The root `.dockerignore` excludes all `**/models/` directories by default (models are typically mounted as volumes). For engines with baked-in models that use `COPY`, add an exception:
 
 ```gitignore
 # Root .dockerignore
@@ -93,14 +105,17 @@ The root `.dockerignore` excludes all `**/models/` directories by default (model
 # Models (mounted as volumes, not baked in)
 **/models/
 
-# Exception for engines with baked-in models
+# Exception for engines with baked-in models (using COPY)
 !tts/debug-tts/models/
-!tts/chatterbox/models/
+!stt/debug-stt/models/
+!text_processing/debug-text/models/
+!audio_analysis/debug-audio/models/
 ```
 
 **Why this pattern?**
 - Most engines have large models that should be mounted, not baked in
-- Small engines (like debug-tts) can include models in the image
+- Small engines (like debug-tts) can include models in the image via `COPY`
+- Engines that download models during build (like Chatterbox) don't need an exception
 - Without the exception, `COPY` fails with "not found" error
 
 **Troubleshooting:**
@@ -121,7 +136,8 @@ class BaseEngineServer:
         if Path("/app").exists() and Path("/app/server.py").exists():
             self.base_path = Path("/app")
         else:
-            self.base_path = Path(sys.argv[0]).parent.resolve()
+            # Subprocess: use the directory where server.py is located
+            self.base_path = Path(sys.argv[0]).parent.resolve() if sys.argv[0] else Path(__file__).parent
 
         self.models_dir = self.base_path / "models"
         self.external_models_dir = self.base_path / "external_models"
@@ -139,21 +155,43 @@ def load_model(self, model_name: str):
 
 ## Usage Scenarios
 
-### Scenario 1: Small Models (Baked-in)
+### Scenario 1a: Small Models (COPY from repo)
 
-Models small enough to include in the Docker image (e.g., Chatterbox ~3GB).
+Models small enough to include in the Docker image and stored in the repository.
 
 ```dockerfile
-# Bake model into image during build
-COPY models/ ./models/
-# OR download during build
-RUN python -c "download_model('/app/models/')"
+# Bake model into image during build (requires .dockerignore exception!)
+COPY tts/debug-tts/models/ ./models/
 ```
 
 ```bash
 # Run without mounting
-docker run engine:latest
+docker run debug-tts:latest
 ```
+
+**Note:** Requires adding `!tts/engine-name/models/` to `.dockerignore`.
+
+### Scenario 1b: Models Downloaded During Build
+
+Models downloaded from external sources (HuggingFace, etc.) during Docker build.
+This avoids storing large files in the repository while still baking them into the image.
+
+```dockerfile
+# Download model files during build (e.g., Chatterbox ~1.5GB from HuggingFace)
+RUN mkdir -p /app/models && python -c "\
+from huggingface_hub import hf_hub_download; \
+import shutil; \
+files = ['model.pt', 'config.json']; \
+[shutil.copy(hf_hub_download('org/repo', f), '/app/models/') for f in files]" \
+    && rm -rf /root/.cache/huggingface
+```
+
+```bash
+# Run without mounting - model is baked in
+docker run chatterbox:latest
+```
+
+**Note:** No `.dockerignore` exception needed since models aren't copied from repo.
 
 ### Scenario 2: Baked-in Default + Optional External
 
@@ -269,7 +307,8 @@ Use this checklist when creating or reviewing engines:
 
 | Requirement | Implementation |
 |-------------|----------------|
-| Copy baked-in models | `COPY tts/engine/models/ ./models/` |
+| Baked-in models (Option A) | `COPY tts/engine/models/ ./models/` (requires .dockerignore exception) |
+| Baked-in models (Option B) | `RUN python -c "download_model('/app/models/')"` (no exception needed) |
 | Copy entrypoint script | `COPY scripts/docker-entrypoint.sh ./` |
 | Make entrypoint executable | `RUN chmod +x /app/docker-entrypoint.sh` |
 | Create standard directories | `RUN mkdir -p /app/models /app/external_models /app/samples` |
@@ -279,7 +318,7 @@ Use this checklist when creating or reviewing engines:
 
 | Requirement | Implementation |
 |-------------|----------------|
-| Exception for baked-in models | `!tts/engine-name/models/` after `**/models/` |
+| Exception for COPY baked-in models | `!tts/engine-name/models/` after `**/models/` (only if using COPY) |
 
 ### Example: Conforming Engine (debug-tts)
 

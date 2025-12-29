@@ -6,8 +6,8 @@ This is the template for creating new **Speech-to-Text (STT)** engine servers.
 
 1. **Copy template to new directory:**
    ```bash
-   cp -r backend/engines/stt/_template backend/engines/stt/my_stt_engine
-   cd backend/engines/stt/my_stt_engine
+   cp -r stt/_template stt/my_stt_engine
+   cd stt/my_stt_engine
    ```
 
 2. **Customize the template:**
@@ -61,6 +61,7 @@ STT Engine (your server.py) extends BaseQualityServer
 | `/health` | GET | Health check, returns status and loaded model |
 | `/load` | POST | Load a model by name |
 | `/models` | GET | List available models with metadata |
+| `/info` | GET | Engine metadata from engine.yaml |
 | `/shutdown` | POST | Graceful shutdown |
 
 ### STT-Specific Endpoint (you implement)
@@ -218,41 +219,57 @@ class MySTTServer(BaseQualityServer):
 
     def unload_model(self) -> None:
         self.model = None
-        self.current_model = None
-        self.model_loaded = False
+        # Note: model_loaded and current_model are reset by base_server.py
 
     def get_available_models(self) -> List[ModelInfo]:
         return [
-            ModelInfo(name="base", display_name="Base Model"),
-            ModelInfo(name="large", display_name="Large Model"),
+            ModelInfo(name="base", display_name="Base Model", languages=["en", "de"], fields=[]),
+            ModelInfo(name="large", display_name="Large Model", languages=["en", "de"], fields=[]),
         ]
 ```
 
 ## Configuration (engine.yaml)
 
 ```yaml
-name: "my_stt"
-display_name: "My STT Engine"
-version: "1.0.0"
-type: stt
+schema_version: 2
 
-python_version: "3.10"
-venv_path: "./venv"
+name: "my-stt"
+display_name: "My STT Engine"
+engine_type: "stt"
+description: "My custom STT engine"
+
+upstream:
+  name: "Original Project"
+  url: "https://github.com/..."
+  license: "MIT"
+
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64"]
+    requires_gpu: false
 
 models:
   - name: "base"
     display_name: "Base Model"
-    size_mb: 150
   - name: "large"
     display_name: "Large Model"
-    size_mb: 1500
+
+default_model: "base"
 
 supported_languages:
   - en
   - de
   - fr
 
-default_model: "base"
+capabilities:
+  supports_model_hotswap: true
+  supports_speaker_cloning: false
+  supports_streaming: false
+
+installation:
+  python_version: "3.10"
+  venv_path: "./venv"
+  requires_gpu: false
 ```
 
 ## Directory Structure
@@ -285,14 +302,32 @@ curl http://localhost:8767/models
 # Test load
 curl -X POST http://localhost:8767/load \
   -H "Content-Type: application/json" \
-  -d '{"modelName": "base"}'
+  -d '{"engineModelName": "base"}'
 
 # Test analyze (with base64 audio)
 curl -X POST http://localhost:8767/analyze \
   -H "Content-Type: application/json" \
-  -d '{"audioBase64":"<base64-data>","language":"en"}'
+  -d '{"audioBase64":"<base64-data>","language":"en","qualityThresholds":{}}'
+```
+
+### Automated API Testing
+
+Use the comprehensive test suite:
+
+```bash
+# Run full test suite
+python scripts/test_engine.py --port 8767 --verbose
+
+# Skip shutdown test during development
+python scripts/test_engine.py --port 8767 --skip-shutdown
 ```
 
 ## Examples
 
-See `backend/engines/stt/whisper/` for a complete working example.
+See `stt/whisper/` for a complete working example.
+
+## Documentation
+
+- [Engine Development Guide](../../docs/engine-development-guide.md) - Complete development guide
+- [Engine Server API](../../docs/engine-server-api.md) - API endpoint documentation
+- [Model Management](../../docs/model-management.md) - Model handling patterns

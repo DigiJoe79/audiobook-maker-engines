@@ -8,8 +8,8 @@ Text processing engines segment text into chunks suitable for TTS generation, en
 
 1. **Copy template to new directory:**
    ```bash
-   cp -r backend/engines/text_processing/_template backend/engines/text_processing/my_processor
-   cd backend/engines/text_processing/my_processor
+   cp -r text_processing/_template text_processing/my_processor
+   cd text_processing/my_processor
    ```
 
 2. **Customize the template:**
@@ -63,6 +63,7 @@ Text Processing Engine (your server.py) extends BaseTextServer
 | `/health` | GET | Health check, returns status |
 | `/load` | POST | Load a model (often language-specific) |
 | `/models` | GET | List available models/languages |
+| `/info` | GET | Engine metadata from engine.yaml |
 | `/shutdown` | POST | Graceful shutdown |
 
 ### Text-Specific Endpoint (you implement)
@@ -236,26 +237,42 @@ class MyTextProcessor(BaseTextServer):
 
     def unload_model(self) -> None:
         self.nlp = None
-        self.model_loaded = False
-        self.current_model = None
+        # Note: model_loaded and current_model are reset by base_server.py
 
     def get_available_models(self) -> List[ModelInfo]:
         return [
-            ModelInfo(name="en_core_web_sm", display_name="English"),
-            ModelInfo(name="de_core_news_sm", display_name="German"),
+            ModelInfo(name="en_core_web_sm", display_name="English", languages=["en"], fields=[]),
+            ModelInfo(name="de_core_news_sm", display_name="German", languages=["de"], fields=[]),
         ]
 ```
 
 ## Configuration (engine.yaml)
 
 ```yaml
-name: "my_processor"
-display_name: "My Text Processor"
-version: "1.0.0"
-type: text
+schema_version: 2
 
-python_version: "3.10"
-venv_path: "./venv"
+name: "my-processor"
+display_name: "My Text Processor"
+engine_type: "text"
+description: "My custom text processor"
+
+upstream:
+  name: "Original Project"
+  url: "https://github.com/..."
+  license: "MIT"
+
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64"]
+    requires_gpu: false
+
+models:
+  - name: "en_core_web_sm"
+    display_name: "English"
+  - name: "de_core_news_sm"
+    display_name: "German"
+
+default_model: "en_core_web_sm"
 
 supported_languages:
   - en
@@ -263,31 +280,18 @@ supported_languages:
   - es
   - fr
 
-capabilities:
-  supports_model_hotswap: true
-  supports_gpu: false
-
 constraints:
   max_text_length: 1000000
 
-config:
-  parameter_schema:
-    max_length:
-      type: "int"
-      label: "settings.text.myProcessor.maxLength"
-      default: 250
-      min: 50
-      max: 500
-    min_length:
-      type: "int"
-      label: "settings.text.myProcessor.minLength"
-      default: 10
-      min: 1
-      max: 100
-    mark_oversized:
-      type: "bool"
-      label: "settings.text.myProcessor.markOversized"
-      default: true
+capabilities:
+  supports_model_hotswap: true
+  supports_speaker_cloning: false
+  supports_streaming: false
+
+installation:
+  python_version: "3.10"
+  venv_path: "./venv"
+  requires_gpu: false
 ```
 
 ## Directory Structure
@@ -320,7 +324,7 @@ curl http://localhost:8770/models
 # Load model
 curl -X POST http://localhost:8770/load \
   -H "Content-Type: application/json" \
-  -d '{"modelName": "default"}'
+  -d '{"engineModelName": "en_core_web_sm"}'
 
 # Test segment
 curl -X POST http://localhost:8770/segment \
@@ -334,10 +338,28 @@ curl -X POST http://localhost:8770/segment \
   }'
 ```
 
+### Automated API Testing
+
+Use the comprehensive test suite:
+
+```bash
+# Run full test suite
+python scripts/test_engine.py --port 8770 --verbose
+
+# Skip shutdown test during development
+python scripts/test_engine.py --port 8770 --skip-shutdown
+```
+
 ## Examples
 
 See these working implementations:
-- `backend/engines/text_processing/spacy/` - spaCy-based sentence segmentation with multi-language support
+- `text_processing/spacy/` - spaCy-based sentence segmentation with multi-language support
+
+## Documentation
+
+- [Engine Development Guide](../../docs/engine-development-guide.md) - Complete development guide
+- [Engine Server API](../../docs/engine-server-api.md) - API endpoint documentation
+- [Model Management](../../docs/model-management.md) - Model handling patterns
 
 ## Common NLP Libraries
 

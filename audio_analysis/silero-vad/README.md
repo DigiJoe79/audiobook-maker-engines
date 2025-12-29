@@ -77,19 +77,19 @@ The engine runs as a FastAPI server and is managed by the backend's AudioEngineM
 **Response:**
 ```json
 {
-  "engine_type": "audio",
-  "engine_name": "silero-vad",
-  "quality_score": 85,
-  "quality_status": "perfect",
+  "engineType": "audio",
+  "engineName": "silero-vad",
+  "qualityScore": 85,
+  "qualityStatus": "perfect",
   "details": {
-    "top_label": "quality.audio.sileroVad",
+    "topLabel": "quality.audio.sileroVad",
     "fields": [
       {"key": "quality.audio.speechRatio", "value": 82, "type": "percent"},
       {"key": "quality.audio.maxSilence", "value": 1500, "type": "number"},
       {"key": "quality.audio.peakVolume", "value": "-2.3 dB", "type": "string"},
       {"key": "quality.audio.avgVolume", "value": "-35.1 dB", "type": "string"}
     ],
-    "info_blocks": {
+    "infoBlocks": {
       "issues": [
         {"text": "quality.audio.speechRatioLow", "severity": "warning"}
       ]
@@ -164,6 +164,20 @@ This engine integrates with the Quality Worker system:
 2. AudioEngineManager starts this engine on-demand
 3. Engine analyzes audio and returns generic quality format
 4. Results stored in DB and displayed in UI
+
+## Testing
+
+Validate your engine with the automated test suite:
+
+```bash
+# Run full API test suite
+python scripts/test_engine.py --port 8768 --verbose
+```
+
+## Documentation
+
+- [Engine Development Guide](../../docs/engine-development-guide.md) - Complete development guide
+- [Engine Server API](../../docs/engine-server-api.md) - API endpoint documentation
 
 ## Future Enhancements
 

@@ -74,14 +74,14 @@ transformers >4.52.1, <4.56
 
 ### Windows
 ```bash
-cd backend/engines/tts/xtts
+cd tts/xtts
 python -m venv venv
 venv\Scripts\pip install -r requirements.txt
 ```
 
 ### Linux/Mac
 ```bash
-cd backend/engines/tts/xtts
+cd tts/xtts
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -124,9 +124,21 @@ models/
 - Ensure model files are complete in models/ directory
 - Check file permissions
 
+## Testing
+
+Validate your engine with the automated test suite:
+
+```bash
+# Run full API test suite
+python scripts/test_engine.py --port 8766 --verbose
+```
+
+See [docs/engine-development-guide.md](../../docs/engine-development-guide.md) for comprehensive testing documentation.
+
 ## References
 
 - [coqui-tts (Idiap Fork)](https://github.com/idiap/coqui-ai-TTS)
 - [PyPI: coqui-tts](https://pypi.org/project/coqui-tts/)
 - [PyTorch Previous Versions](https://pytorch.org/get-started/previous-versions/)
 - [Original Coqui TTS (archived)](https://github.com/coqui-ai/TTS)
+- [Engine Development Guide](../../docs/engine-development-guide.md)

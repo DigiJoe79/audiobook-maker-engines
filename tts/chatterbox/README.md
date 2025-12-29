@@ -8,11 +8,11 @@ High-quality multilingual text-to-speech engine with voice cloning support.
 
 ## Features
 
-- ✅ **23 Languages**: Arabic, Chinese, Danish, Dutch, English, Finnish, French, German, Greek, Hebrew, Hindi, Italian, Japanese, Korean, Malay, Norwegian, Polish, Portuguese, Russian, Spanish, Swedish, Swahili, Turkish
-- ✅ **Voice Cloning**: Clone any voice from a reference audio sample
-- ✅ **High Quality**: 24kHz sample rate for natural-sounding speech
-- ✅ **GPU Accelerated**: CUDA support for faster generation
-- ✅ **Controllable**: Fine-tune exaggeration, temperature, and pacing
+- **23 Languages**: Arabic, Chinese, Danish, Dutch, English, Finnish, French, German, Greek, Hebrew, Hindi, Italian, Japanese, Korean, Malay, Norwegian, Polish, Portuguese, Russian, Spanish, Swedish, Swahili, Turkish
+- **Voice Cloning**: Clone any voice from a reference audio sample
+- **High Quality**: 24kHz sample rate for natural-sounding speech
+- **GPU Accelerated**: CUDA support for faster generation
+- **Controllable**: Fine-tune exaggeration, temperature, and pacing
 
 ## Supported Languages
 
@@ -34,14 +34,14 @@ High-quality multilingual text-to-speech engine with voice cloning support.
 ### Windows
 
 ```bash
-cd backend/engines/chatterbox
+cd tts/chatterbox
 setup.bat
 ```
 
 ### Linux/Mac
 
 ```bash
-cd backend/engines/chatterbox
+cd tts/chatterbox
 chmod +x setup.sh
 ./setup.sh
 ```
@@ -236,9 +236,18 @@ venv/bin/python server.py --port 8766
 - `POST /load` - Load model
 - `POST /generate` - Generate TTS audio
 - `GET /health` - Health check
+- `GET /info` - Engine metadata
+- `GET /models` - Available models
 - `POST /shutdown` - Graceful shutdown
 
-See `backend/engines/base_server.py` for API documentation.
+See [docs/engine-server-api.md](../../docs/engine-server-api.md) for API documentation.
+
+### Automated Testing
+
+```bash
+# Run full API test suite
+python scripts/test_engine.py --port 8766 --verbose
+```
 
 ## References
 
@@ -246,3 +255,4 @@ See `backend/engines/base_server.py` for API documentation.
 - [chatterbox-tts (PyPI)](https://pypi.org/project/chatterbox-tts/)
 - [Resemble AI](https://www.resemble.ai/)
 - [HuggingFace Model](https://huggingface.co/ResembleAI/chatterbox)
+- [Engine Development Guide](../../docs/engine-development-guide.md)

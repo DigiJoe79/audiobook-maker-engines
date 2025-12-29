@@ -6,8 +6,8 @@ This is the template for creating new **Text-to-Speech (TTS)** engine servers.
 
 1. **Copy template to new directory:**
    ```bash
-   cp -r backend/engines/tts/_template backend/engines/tts/my_engine
-   cd backend/engines/tts/my_engine
+   cp -r tts/_template tts/my_engine
+   cd tts/my_engine
    ```
 
 2. **Customize the template:**
@@ -62,13 +62,16 @@ BaseTTSServer (base_tts_server.py) extends BaseEngineServer
 | `/health` | GET | Health check, returns status and loaded model |
 | `/load` | POST | Load a model by name |
 | `/models` | GET | List available models with metadata |
+| `/info` | GET | Engine metadata from engine.yaml |
 | `/shutdown` | POST | Graceful shutdown |
 
-### TTS-Specific Endpoint (from BaseTTSServer)
+### TTS-Specific Endpoints (from BaseTTSServer)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/generate` | POST | Generate TTS audio, returns WAV bytes |
+| `/samples/check` | POST | Check which speaker samples exist |
+| `/samples/upload/{sample_id}` | POST | Upload speaker sample WAV |
 
 ## Required Methods
 
@@ -105,15 +108,15 @@ def get_available_models(self) -> List[ModelInfo]:
 **Request:**
 ```json
 {
-  "ttsModelName": "v2.0.3"
+  "engineModelName": "v2.0.3"
 }
 ```
 
 **Response:**
 ```json
 {
-  "status": "ok",
-  "model": "v2.0.3"
+  "status": "loaded",
+  "engineModelName": "v2.0.3"
 }
 ```
 
@@ -124,7 +127,7 @@ def get_available_models(self) -> List[ModelInfo]:
 {
   "text": "Hello world",
   "language": "en",
-  "speakerWav": "/path/to/speaker.wav",
+  "ttsSpeakerWav": "/path/to/speaker.wav",
   "parameters": {
     "speed": 1.0,
     "temperature": 0.7
@@ -132,7 +135,7 @@ def get_available_models(self) -> List[ModelInfo]:
 }
 ```
 
-**Response:** Binary WAV audio data
+**Response:** Binary WAV audio data (Content-Type: audio/wav)
 
 ### GET /models
 
@@ -143,13 +146,14 @@ def get_available_models(self) -> List[ModelInfo]:
     {
       "name": "v2.0.3",
       "displayName": "XTTS v2.0.3",
+      "languages": ["en", "de", "fr"],
       "fields": [
-        {"key": "size_mb", "value": 1800, "fieldType": "number"},
-        {"key": "languages", "value": 17, "fieldType": "number"}
+        {"key": "size_mb", "value": 1800, "fieldType": "number"}
       ]
     }
   ],
-  "defaultModel": "v2.0.3"
+  "defaultModel": "v2.0.3",
+  "device": "cuda"
 }
 ```
 
@@ -158,41 +162,57 @@ def get_available_models(self) -> List[ModelInfo]:
 **Response:**
 ```json
 {
-  "status": "healthy",
-  "engineName": "xtts",
-  "modelLoaded": true,
-  "currentModel": "v2.0.3"
+  "status": "ready",
+  "engineModelLoaded": true,
+  "currentEngineModel": "v2.0.3",
+  "device": "cuda",
+  "packageVersion": "1.0.0"
 }
 ```
 
 ## Configuration (engine.yaml)
 
 ```yaml
-name: "my_engine"
+schema_version: 2
+
+name: "my-engine"
 display_name: "My TTS Engine"
-version: "1.0.0"
-type: tts
+engine_type: "tts"
+description: "My custom TTS engine"
 
-python_version: "3.10"
-venv_path: "./venv"
+upstream:
+  name: "Original Project"
+  url: "https://github.com/..."
+  license: "MIT"
 
-capabilities:
-  supports_model_hotswap: true
-  supports_speaker_cloning: true
-  supports_streaming: false
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64"]
+    requires_gpu: false
 
-constraints:
-  min_text_length: 10
-  max_text_length: 500
-  sample_rate: 24000
-  audio_format: "wav"
+models:
+  - name: "default"
+    display_name: "Default Model"
+
+default_model: "default"
 
 supported_languages:
   - en
   - de
   - fr
 
-default_model: "default"
+constraints:
+  max_text_length: 500
+
+capabilities:
+  supports_model_hotswap: true
+  supports_speaker_cloning: true
+  supports_streaming: false
+
+installation:
+  python_version: "3.10"
+  venv_path: "./venv"
+  requires_gpu: false
 ```
 
 ## Directory Structure
@@ -234,15 +254,33 @@ curl http://localhost:8766/models
 # Test load
 curl -X POST http://localhost:8766/load \
   -H "Content-Type: application/json" \
-  -d '{"ttsModelName":"default"}'
+  -d '{"engineModelName":"default"}'
 
 # Test generate
 curl -X POST http://localhost:8766/generate \
   -H "Content-Type: application/json" \
-  -d '{"text":"Hello world","language":"en","speakerWav":"","parameters":{}}' \
+  -d '{"text":"Hello world","language":"en","ttsSpeakerWav":"","parameters":{}}' \
   --output test.wav
+```
+
+### Automated API Testing
+
+Use the comprehensive test suite:
+
+```bash
+# Run full test suite
+python scripts/test_engine.py --port 8766 --verbose
+
+# Skip shutdown test during development
+python scripts/test_engine.py --port 8766 --skip-shutdown
 ```
 
 ## Examples
 
-See `backend/engines/tts/xtts/` and `backend/engines/tts/chatterbox/` for complete working examples.
+See `tts/xtts/` and `tts/chatterbox/` for complete working examples.
+
+## Documentation
+
+- [Engine Development Guide](../../docs/engine-development-guide.md) - Complete development guide
+- [Engine Server API](../../docs/engine-server-api.md) - API endpoint documentation
+- [Model Management](../../docs/model-management.md) - Model handling patterns
