@@ -111,7 +111,7 @@ COPY tts/xtts/engine.yaml ./
 
 # Copy shared entrypoint script
 COPY scripts/docker-entrypoint.sh ./
-RUN chmod +x docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Download XTTS v2.0.2 model from HuggingFace (coqui/XTTS-v2)
 # Files: model.pth (~1.8GB), config.json, vocab.json
@@ -141,6 +141,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 
 # Run entrypoint (symlinks external models, then starts server)
 # nosemgrep: dockerfile.security.missing-user-entrypoint.missing-user-entrypoint -- Container runs isolated engine server with no shell access
-ENTRYPOINT ["./docker-entrypoint.sh"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 # nosemgrep: dockerfile.security.missing-user.missing-user -- Container runs isolated engine server with no shell access
 CMD ["sh", "-c", "python server.py --port ${PORT:-8766} --host 0.0.0.0"]

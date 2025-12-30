@@ -1,10 +1,10 @@
 # VibeVoice TTS Engine Dependencies
 # Python 3.12 required
 
-# FastAPI Server (same versions as other engines)
-fastapi==0.109.2
-uvicorn==0.27.0
-pydantic==2.10.6
+# FastAPI Server (aligned with other engines)
+fastapi>=0.115.0,<1.0.0
+uvicorn>=0.32.0,<1.0.0
+pydantic>=2.10.0,<3.0.0
 python-multipart>=0.0.9,<1.0.0
 loguru==0.7.2
 httpx>=0.28.0  # Required for Docker HEALTHCHECK

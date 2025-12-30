@@ -21,9 +21,9 @@ torch>=2.5.0,<3.0.0
 torchaudio>=2.5.0,<3.0.0
 
 # Web Framework
-# FastAPI 0.120+ ensures Pydantic 2.12 compatibility
-fastapi>=0.120.0
-uvicorn[standard]>=0.34.0
+# FastAPI 0.115+ with upper bound for stability
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.32.0,<1.0.0
 pydantic>=2.10.0,<3.0.0
 
 # Audio Processing

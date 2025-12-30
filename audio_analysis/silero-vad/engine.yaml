@@ -28,6 +28,9 @@ models:
 
 default_model: "silero-vad"
 
+# LANGUAGES (audio analysis is language-independent)
+supported_languages: []
+
 # CAPABILITIES
 capabilities:
   supports_model_hotswap: false  # Single VAD model

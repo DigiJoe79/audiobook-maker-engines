@@ -91,3 +91,4 @@ engine_config:
 installation:
   python_version: "3.12"
   venv_path: "./venv"
+  requires_gpu: true
