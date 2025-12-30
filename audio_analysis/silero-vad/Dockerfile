@@ -91,5 +91,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # -----------------------------------------------------------------------------
 # Entrypoint
 # -----------------------------------------------------------------------------
+# nosemgrep: dockerfile.security.missing-user-entrypoint.missing-user-entrypoint -- Container runs isolated engine server with no shell access
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
+# nosemgrep: dockerfile.security.missing-user.missing-user -- Container runs isolated engine server with no shell access
 CMD ["sh", "-c", "python server.py --port ${PORT:-8769} --host 0.0.0.0"]

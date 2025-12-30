@@ -34,6 +34,7 @@ jobs:
     steps:
       - name: Set build matrix
         id: set-matrix
+        # nosemgrep: yaml.github-actions.security.run-shell-injection.run-shell-injection -- inputs.engine is a fixed choice dropdown, not user-controlled freetext
         run: |
           if [ "${{ inputs.engine }}" = "all" ]; then
             echo 'matrix=["debug-tts","debug-stt","debug-text","debug-audio","chatterbox","vibevoice","xtts","whisper","whisper-cpu","silero-vad","spacy"]' >> $GITHUB_OUTPUT

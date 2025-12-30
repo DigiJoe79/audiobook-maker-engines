@@ -364,6 +364,7 @@ class SpacyServer(BaseTextServer):
         # Find where spacy installed it and copy to external_models
         try:
             import importlib
+            # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import -- model_name validated by _is_valid_spacy_model() regex before reaching this point
             model_module = importlib.import_module(model_name)
             source_path = Path(model_module.__path__[0])
 

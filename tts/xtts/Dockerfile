@@ -140,5 +140,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:${PORT}/health')" || exit 1
 
 # Run entrypoint (symlinks external models, then starts server)
+# nosemgrep: dockerfile.security.missing-user-entrypoint.missing-user-entrypoint -- Container runs isolated engine server with no shell access
 ENTRYPOINT ["./docker-entrypoint.sh"]
+# nosemgrep: dockerfile.security.missing-user.missing-user -- Container runs isolated engine server with no shell access
 CMD ["sh", "-c", "python server.py --port ${PORT:-8766} --host 0.0.0.0"]

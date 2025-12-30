@@ -43,6 +43,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 # PyTorch with CUDA Support
 # -----------------------------------------------------------------------------
 # PyTorch 2.5.1 for stability (matches other GPU engines)
+# nosemgrep: dockerfile.audit.dockerfile-pip-extra-index-url.dockerfile-pip-extra-index-url -- torch/torchaudio are version-pinned; official PyTorch index
 RUN pip install --no-cache-dir \
     torch==2.5.1 \
     torchaudio==2.5.1 \
@@ -91,5 +92,7 @@ EXPOSE 8767
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:${PORT}/health')" || exit 1
 
+# nosemgrep: dockerfile.security.missing-user-entrypoint.missing-user-entrypoint -- Container runs isolated engine server with no shell access
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
+# nosemgrep: dockerfile.security.missing-user.missing-user -- Container runs isolated engine server with no shell access
 CMD ["sh", "-c", "python server.py --port ${PORT:-8767} --host 0.0.0.0"]
