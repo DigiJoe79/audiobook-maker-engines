@@ -10,9 +10,10 @@
 4. [Implementation Guide](#implementation-guide)
 5. [Configuration Reference](#configuration-reference)
 6. [Testing Your Engine](#testing-your-engine)
-7. [Best Practices](#best-practices)
-8. [Examples](#examples)
-9. [Troubleshooting](#troubleshooting)
+7. [Subprocess Development](#subprocess-development)
+8. [Best Practices](#best-practices)
+9. [Examples](#examples)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -935,6 +936,89 @@ class AudioQualityServer(BaseQualityServer):
             ModelInfo(name="default", display_name="Silero VAD", languages=[], fields=[])
         ]
 ```
+
+---
+
+## Subprocess Development
+
+> **Note:** Docker is the primary deployment method. Subprocess mode is only for engine development without rebuilding containers after every code change.
+
+### Setup
+
+1. Clone this repository into the audiobook-maker `engines/` directory:
+
+   ```bash
+   cd /path/to/audiobook-maker
+   git clone https://github.com/user/audiobook-maker-engines engines
+   ```
+
+2. The backend auto-discovers engines in `engines/` subdirectories based on `engine.yaml` files.
+
+3. Create a virtual environment and install dependencies:
+
+   ```bash
+   cd engines/tts/my-engine
+   python -m venv venv
+
+   # Windows
+   venv\Scripts\pip install -r requirements.txt
+
+   # Linux/Mac
+   venv/bin/pip install -r requirements.txt
+   ```
+
+4. Start the engine server manually:
+
+   ```bash
+   # Windows
+   venv\Scripts\python server.py --port 8766
+
+   # Linux/Mac
+   venv/bin/python server.py --port 8766
+   ```
+
+### Directory Structure
+
+```
+audiobook-maker/
+├── backend/
+├── frontend/
+├── engines/                      # Clone audiobook-maker-engines here
+│   ├── base_server.py
+│   ├── base_tts_server.py
+│   ├── tts/
+│   │   ├── debug-tts/
+│   │   │   ├── server.py
+│   │   │   ├── engine.yaml
+│   │   │   ├── requirements.txt
+│   │   │   └── venv/            # Created by you
+│   │   └── xtts/
+│   └── stt/
+│       └── whisper/
+```
+
+### When to Use Subprocess Mode
+
+| Use Case | Recommended Mode |
+|----------|------------------|
+| Rapid iteration on `server.py` | Subprocess |
+| Testing parameter changes | Subprocess |
+| Debugging with breakpoints | Subprocess |
+| Production deployment | Docker |
+| GPU engines (XTTS, Whisper) | Docker |
+| Sharing with others | Docker |
+
+### Limitations
+
+- **GPU engines**: Require matching CUDA/PyTorch versions on your system. Docker handles this automatically.
+- **No isolation**: Dependencies may conflict with other Python projects.
+- **Manual setup**: Each developer must create venv and install dependencies.
+
+### Tips
+
+- Use `--skip-shutdown` with `test_engine.py` to keep the engine running between test runs
+- The backend detects subprocess engines by checking for `venv/` directory
+- Logs appear directly in your terminal (no need to check Docker logs)
 
 ---
 
