@@ -633,7 +633,71 @@ SegmentItem(
 
 ### `engine.yaml` Structure
 
-See [CLAUDE.md](../CLAUDE.md#engineyaml-schema) for the complete schema reference.
+```yaml
+schema_version: 2
+
+# IDENTITY (required)
+name: "engine-id"
+display_name: "Human Name"
+engine_type: "tts"  # tts, stt, text, audio
+description: "Description"
+
+# UPSTREAM (credits & license)
+upstream:
+  name: "Source Project"
+  url: "https://..."
+  license: "MIT"
+
+# DISTRIBUTION (Docker variants)
+variants:
+  - tag: "latest"
+    platforms: ["linux/amd64", "linux/arm64"]
+    requires_gpu: false
+
+# MODELS
+models:
+  - name: "model-id"
+    display_name: "Model Name"
+
+default_model: "model-id"
+auto_discover_models: false  # Scan models/ directory at runtime
+
+# LANGUAGES
+supported_languages: [de, en, fr]
+
+# CONSTRAINTS (actively used: max_text_length)
+constraints:
+  max_text_length: 10000
+
+# CAPABILITIES (actively used: supports_model_hotswap)
+capabilities:
+  supports_model_hotswap: true
+  supports_speaker_cloning: false
+  supports_streaming: false
+
+# UI PARAMETERS
+parameters:
+  param_name:
+    type: "float"
+    label: "i18n.key"
+    description: "i18n.key.desc"
+    default: 1.0
+    min: 0.0
+    max: 2.0
+    step: 0.1
+    readonly: false
+    category: "optional_group"  # Optional: UI grouping
+
+# ENGINE-SPECIFIC CONFIG (optional)
+engine_config:
+  custom_key: "custom_value"  # Engine-specific settings
+
+# INSTALLATION (subprocess engines)
+installation:
+  python_version: "3.10"
+  venv_path: "./venv"
+  requires_gpu: false
+```
 
 ### Language Codes (ISO 639-1)
 
@@ -1123,7 +1187,7 @@ logger.debug(f"[{self.engine_name}] Language: {language}, Speaker: {speaker_wav}
 
 - [engine-server-api.md](engine-server-api.md) - Detailed API endpoint documentation
 - [model-management.md](model-management.md) - Model Management Standard
-- [CLAUDE.md](../CLAUDE.md) - Quick reference for engine creation
+- [engine-readme-template.md](engine-readme-template.md) - README template for engines
 - [scripts/test_engine.py](../scripts/test_engine.py) - Automated API test suite
 
 ---

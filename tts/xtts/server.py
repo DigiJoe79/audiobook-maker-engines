@@ -72,8 +72,6 @@ class XTTSServer(BaseTTSServer):
 
     def load_model(self, model_name: str) -> None:
         """Load XTTS model into memory"""
-        from fastapi import HTTPException
-
         model_path = self.models_dir / model_name
 
         if not model_path.exists():

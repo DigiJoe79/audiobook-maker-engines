@@ -1,68 +1,183 @@
-# Whisper STT Engine
+# OpenAI Whisper
 
-Isolated STT (Speech-to-Text) engine for audio quality analysis using OpenAI Whisper.
+State-of-the-art speech recognition with automatic language detection. Supports transcription and translation across 99+ languages.
 
 ## Overview
 
-This is an STT service that provides:
+Whisper is an STT (Speech-to-Text) engine that provides transcription with confidence scoring and text comparison. This engine converts audio to text with word-level timestamps and validates transcription accuracy against expected text.
+
+**Key Features:**
 - **Whisper Transcription** - Convert audio to text with word-level timestamps
-- **Audio Quality Analysis** - Speech ratio, silence detection, clipping detection
-- **Combined Analysis** - Single endpoint for both transcription and quality checks
+- **Confidence Scoring** - Per-word and overall confidence metrics
+- **Text Comparison** - Compare transcription against expected text to detect pronunciation issues
+- **Pronunciation Rules Support** - Filter false positives using custom pronunciation rules
+- **Multi-language Support** - Automatic language detection across 99+ languages
 
-This engine inherits from `BaseQualityServer` and uses the Generic Quality Format for integration with the QualityWorker system.
+**Note:** This engine provides transcription only. For audio quality analysis (speech ratio, silence detection, clipping), use the separate [Silero-VAD](../../audio_analysis/silero-vad/) engine.
 
-## Setup
+## Supported Languages
 
-### Windows
+Whisper supports 99+ languages with automatic language detection. Common languages include:
+
+| Language | Code |
+|----------|------|
+| English  | en   |
+| German   | de   |
+| French   | fr   |
+| Spanish  | es   |
+| Italian  | it   |
+| Portuguese | pt |
+| Dutch    | nl   |
+| Polish   | pl   |
+| Russian  | ru   |
+| Japanese | ja   |
+| Chinese  | zh   |
+| Korean   | ko   |
+
+See `engine.yaml` for complete list of supported language codes.
+
+## Installation
+
+### Docker (Recommended)
+
 ```bash
-setup.bat
+# GPU version (recommended)
+docker pull ghcr.io/digijoe79/audiobook-maker-engines/whisper:latest
+docker run -d -p 8767:8767 --gpus all ghcr.io/digijoe79/audiobook-maker-engines/whisper:latest
+
+# CPU version (slower)
+docker pull ghcr.io/digijoe79/audiobook-maker-engines/whisper:cpu
+docker run -d -p 8767:8767 ghcr.io/digijoe79/audiobook-maker-engines/whisper:cpu
 ```
 
-### Linux/Mac
+### Subprocess (Development)
+
 ```bash
-chmod +x setup.sh
+# Windows
+setup.bat
+
+# Linux/Mac
 ./setup.sh
 ```
 
 This creates an isolated virtual environment in `venv/` with all Whisper dependencies.
 
-## Manual Testing
-
-Start the service:
-```bash
-# Windows
-venv\Scripts\python.exe server.py --port 8767
-
-# Linux/Mac
-source venv/bin/activate
-python server.py --port 8767
-```
-
-Test analysis (requires audio file as base64):
-```bash
-curl -X POST http://localhost:8767/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"audioData": "<base64_encoded_wav>", "language": "de"}'
-```
-
 ## API Endpoints
 
-### Core Endpoints
-- `POST /analyze` - Analyze single audio file (Whisper + Quality)
-- `POST /batch-analyze` - Analyze multiple files
-- `POST /load-model` - Load specific Whisper model
-- `GET /health` - Service health check
-- `GET /models` - List available models
+### Common Endpoints (from BaseEngineServer)
 
-### Transcription Analysis (`/analyze`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/load` | POST | Load a specific model |
+| `/models` | GET | List available models |
+| `/health` | GET | Health check with status and device info |
+| `/info` | GET | Engine metadata from engine.yaml |
+| `/shutdown` | POST | Graceful shutdown |
+
+### Quality Endpoints (from BaseQualityServer)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/analyze` | POST | Analyze audio and return quality metrics |
+
+---
+
+## API Reference
+
+### POST /load
+
+Load a specific Whisper model into memory. Auto-unloads previous model (hotswap).
 
 **Request:**
 ```json
 {
-  "audioData": "base64_encoded_wav_data",
+  "engineModelName": "base"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "loaded",
+  "engineModelName": "base"
+}
+```
+
+### GET /models
+
+List available Whisper models with metadata.
+
+**Response:**
+```json
+{
+  "models": [
+    {
+      "name": "tiny",
+      "displayName": "Tiny (39 MB)",
+      "languages": ["en", "de", "fr", "es", "it", "pt", "nl", "pl", "ru", "ja", "zh", "ko"],
+      "fields": [
+        {"key": "size_mb", "value": 39, "fieldType": "number"},
+        {"key": "speed", "value": "~10x realtime", "fieldType": "string"},
+        {"key": "accuracy", "value": "lowest", "fieldType": "string"}
+      ]
+    },
+    {
+      "name": "base",
+      "displayName": "Base (74 MB)",
+      "languages": ["en", "de", "fr", "es", "it", "pt", "nl", "pl", "ru", "ja", "zh", "ko"],
+      "fields": [
+        {"key": "size_mb", "value": 74, "fieldType": "number"},
+        {"key": "speed", "value": "~7x realtime", "fieldType": "string"},
+        {"key": "accuracy", "value": "basic", "fieldType": "string"}
+      ]
+    }
+  ],
+  "defaultModel": "base"
+}
+```
+
+### GET /health
+
+Health check with current status, loaded model, and device information.
+
+**Response:**
+```json
+{
+  "status": "ready",
+  "engineModelLoaded": true,
+  "currentEngineModel": "base",
+  "device": "cuda",
+  "packageVersion": "20250625",
+  "gpuMemoryUsedMb": 2048,
+  "gpuMemoryTotalMb": 8192
+}
+```
+
+**Status Values:**
+- `ready` - Engine is ready to process requests
+- `loading` - Model is currently loading (503 returned for analyze requests)
+- `processing` - Audio is being analyzed
+- `error` - Engine encountered an error
+
+### POST /analyze
+
+Analyze audio with Whisper transcription and optional text comparison.
+
+**Request:**
+```json
+{
+  "audioBase64": "UklGRiQAAABXQVZFZm10IBAAAAABAAEA...",
   "language": "en",
-  "modelName": "base",  // optional
-  "qualityThresholds": {  // optional
+  "expectedText": "Hello world, this is a test.",
+  "pronunciationRules": [
+    {
+      "pattern": "test",
+      "replacement": "tst",
+      "isRegex": false,
+      "isActive": true
+    }
+  ],
+  "qualityThresholds": {
     "maxSilenceDurationWarning": 2500,
     "maxSilenceDurationCritical": 3750,
     "speechRatioIdealMin": 75,
@@ -75,86 +190,284 @@ curl -X POST http://localhost:8767/analyze \
 }
 ```
 
-**Response:**
+**Request Fields:**
+- `audioBase64` (string, required): Base64-encoded WAV audio file
+- `language` (string, default: "en"): Language code for transcription
+- `expectedText` (string, optional): Original text for comparison
+- `pronunciationRules` (array, optional): Active pronunciation rules to filter false positives
+- `qualityThresholds` (object, optional): Quality thresholds (not used by Whisper - confidence-based only)
+
+**Response (Generic Quality Format) - Perfect Match:**
 ```json
 {
-  "transcription": "Hello world",
-  "confidence": 95,
-  "words": [
-    {"word": "Hello", "confidence": 0.98, "start": 0.0, "end": 0.5},
-    {"word": "world", "confidence": 0.92, "start": 0.6, "end": 1.0}
-  ],
-  "language": "en",
-  "duration": 1.0,
-  "audioAnalyzed": true,
-  "audioQualityScore": 85,
-  "audioIssues": [
-    {
-      "type": "low_speech_ratio",
-      "severity": "warning",
-      "message": "",
-      "details": {"speechRatio": 70, "threshold": 75}
-    }
-  ],
-  "speechRatio": 70
+  "engineType": "stt",
+  "engineName": "whisper",
+  "qualityScore": 95,
+  "qualityStatus": "perfect",
+  "details": {
+    "topLabel": "whisperTranscription",
+    "fields": [
+      {
+        "key": "confidence",
+        "value": 95,
+        "type": "percent"
+      },
+      {
+        "key": "language",
+        "value": "en",
+        "type": "string"
+      },
+      {
+        "key": "textMatch",
+        "value": "perfect",
+        "type": "string"
+      }
+    ],
+    "infoBlocks": {}
+  }
 }
 ```
 
+**Response - With Text Deviations:**
+```json
+{
+  "engineType": "stt",
+  "engineName": "whisper",
+  "qualityScore": 80,
+  "qualityStatus": "warning",
+  "details": {
+    "topLabel": "whisperTranscription",
+    "fields": [
+      {
+        "key": "confidence",
+        "value": 85,
+        "type": "percent"
+      },
+      {
+        "key": "language",
+        "value": "en",
+        "type": "string"
+      }
+    ],
+    "infoBlocks": {
+      "textDeviations": [
+        {
+          "text": "wordMismatch",
+          "severity": "warning",
+          "details": {
+            "expected": "hello",
+            "detected": "hallo",
+            "confidence": 0.72
+          }
+        },
+        {
+          "text": "wordMismatch",
+          "severity": "error",
+          "details": {
+            "expected": "world",
+            "detected": "word",
+            "confidence": 0.25
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+**Response Fields:**
+- `engineType` (string): Always "stt" for STT engines
+- `engineName` (string): Engine identifier ("whisper")
+- `qualityScore` (integer): Overall quality score 0-100 (100 = best)
+- `qualityStatus` (string): "perfect" (>=85), "warning" (70-84), or "defect" (<70)
+- `details.topLabel` (string): i18n key for section header
+- `details.fields` (array): Key-value pairs for display
+  - `key` (string): i18n key suffix (frontend prepends "quality.fields.")
+  - `value` (any): Field value
+  - `type` (string): Rendering type (percent, number, seconds, string, text)
+- `details.infoBlocks` (object): Grouped messages by category
+  - Each block contains array of items with:
+    - `text` (string): i18n key suffix (frontend prepends "quality.issues.")
+    - `severity` (string): error, warning, or info
+    - `details` (object, optional): Additional structured data
+
+**Quality Score Calculation:**
+1. Base score = Whisper confidence (0-100)
+2. If `expectedText` provided, compare transcription:
+   - Each word mismatch reduces score by 5 points (max 40 point penalty)
+   - Pronunciation rules filter false positives
+3. Incomplete transcription (>5 missing words) triggers error
+
+**Error Responses:**
+
+```json
+{
+  "detail": "Model not loaded"
+}
+```
+
+```json
+{
+  "detail": "Invalid audio format: expected WAV file"
+}
+```
+
+```json
+{
+  "detail": "Model loading in progress. Retry after loading completes."
+}
+```
+
+---
+
 ## Configuration
 
-Edit `engine.yaml` to configure:
-- **Models** - Available Whisper models (tiny, base, small, medium, large)
-- **Default Model** - Model loaded at startup
-- **Device** - CPU/GPU selection
-- **Languages** - Supported languages
-- **Parameters** - Beam size, temperature, confidence threshold
+Parameters from `engine.yaml`:
+
+| Parameter | Type | Default | Range | Description |
+|-----------|------|---------|-------|-------------|
+| confidence_threshold | float | 0.80 | 0.5-1.0 | Minimum confidence threshold for quality scoring |
 
 ## Available Models
 
 | Model | Size | Speed | Accuracy | Use Case |
 |-------|------|-------|----------|----------|
-| tiny | 39 MB | ~10x realtime | Lowest | Quick testing |
-| base | 74 MB | ~7x realtime | Basic | Default, balanced |
-| small | 244 MB | ~4x realtime | Good | Better accuracy |
-| medium | 769 MB | ~2x realtime | Better | High quality |
-| large | 1550 MB | ~1x realtime | Best | Maximum accuracy |
+| tiny | 39 MB | ~10x realtime | Lowest | Quick testing, development |
+| base | 74 MB | ~7x realtime | Basic | Default, balanced performance |
+| small | 244 MB | ~4x realtime | Good | Better accuracy for production |
+| medium | 769 MB | ~2x realtime | Better | High quality transcription |
+| large | 1550 MB | ~1x realtime | Best | Maximum accuracy (GPU required) |
 
-## Audio Quality Checks
+**Model Selection Guidance:**
+- **Development:** Use `tiny` or `base` for fast iteration
+- **Production (CPU):** Use `small` for best quality/speed balance
+- **Production (GPU):** Use `medium` or `large` for highest accuracy
 
-When `qualityThresholds` is provided, the service performs:
+All models are multilingual and support automatic language detection.
 
-1. **Speech Detection** (Silero VAD)
-   - Speech ratio (0-100%)
-   - Silence duration between speech segments
+## Text Comparison
 
-2. **Clipping Detection**
-   - Peak volume analysis
-   - Distortion detection
+When `expectedText` is provided, the engine performs word-by-word comparison to detect transcription deviations:
 
-3. **Volume Analysis**
-   - Average RMS volume
-   - Normalization recommendations
+### How It Works
 
-## Integration
+1. **Normalization**
+   - Both texts are lowercased
+   - Punctuation is removed for comparison
+   - Texts are split into words
 
-The Whisper service is automatically discovered and managed by the main Audiobook Maker backend's STT system. The engine runs as an isolated Docker container or subprocess.
+2. **Word Alignment**
+   - Words are compared sequentially
+   - Shift detection handles missing/extra words
+   - Pronunciation rules filter false positives
 
-## Testing
+3. **Issue Detection**
+   - **Word Mismatch:** Expected word differs from transcribed word
+     - Severity: `warning` if confidence > 0.3, `error` otherwise
+     - Details include expected, detected, and confidence
+   - **Incomplete Transcription:** More than 5 words missing from end
+     - Severity: `error`
+     - Details include number of missing words
 
-Validate your engine with the automated test suite:
+4. **Quality Score Adjustment**
+   - Each issue reduces score by 5 points
+   - Maximum penalty: 40 points
+   - Perfect match adds `textMatch: "perfect"` field
 
-```bash
-# Run full API test suite
-python scripts/test_engine.py --port 8767 --verbose
+### Pronunciation Rules
+
+Pronunciation rules allow filtering of known variations (accents, regional pronunciations):
+
+```json
+{
+  "pattern": "test",
+  "replacement": "tst",
+  "isRegex": false,
+  "isActive": true
+}
 ```
 
-See [docs/engine-development-guide.md](../../docs/engine-development-guide.md) for comprehensive testing documentation.
+- Words affected by active rules are not counted as mismatches
+- Supports both literal substring matching and regex patterns
+- Rules are evaluated case-insensitively
 
-## Python Version
+### Example Comparison
 
-**Required:** Python 3.12 (specified in engine.yaml)
+**Input:**
+```
+expectedText: "Hello world, this is a test."
+transcription: "Hallo world, this is a tst."
+pronunciationRules: [{"pattern": "test", "replacement": "tst", "isActive": true}]
+```
 
-The service uses modern Python features and PyTorch 2.x compatibility.
+**Result:**
+- Issue 1: "hello" → "hallo" (word mismatch, warning)
+- Issue 2: "test" → "tst" (filtered by pronunciation rule, ignored)
+- Quality Score: 95 (base) - 5 (1 issue) = 90 (perfect)
+
+## Troubleshooting
+
+### Model not loading
+
+**Symptom:** `/load` returns error or timeout
+
+**Solution:**
+1. Check available disk space (models download to `/app/external_models/`)
+2. Verify model name matches engine.yaml: `tiny`, `base`, `small`, `medium`, `large`
+3. Check logs for download errors: `docker logs <container-id>`
+4. For subprocess: Ensure internet connection for first-time download
+
+### GPU Out of Memory
+
+**Symptom:** Analysis fails with CUDA OOM error
+
+**Solution:**
+1. Use smaller model variant (`base` instead of `large`)
+2. Reduce audio file duration (split long recordings)
+3. Restart engine to clear GPU memory: `docker restart <container-id>`
+4. Check GPU memory usage: `nvidia-smi`
+
+### Low confidence scores
+
+**Symptom:** All transcriptions have low confidence (<70%)
+
+**Solution:**
+1. Verify audio quality:
+   - Sample rate should be 16000 Hz or higher
+   - Audio should be clear with minimal background noise
+   - Use Silero-VAD engine to check speech ratio
+2. Use larger model (`medium` or `large`)
+3. Verify correct language code is specified
+
+### Text comparison showing false positives
+
+**Symptom:** Many word mismatches that sound correct
+
+**Solution:**
+1. Create pronunciation rules for known variations
+2. Check for punctuation differences (automatically ignored)
+3. Verify expected text matches audio exactly
+4. Regional accents may require pronunciation rules
+
+### Connection refused
+
+**Symptom:** Cannot connect to engine endpoint
+
+**Solution:**
+1. Verify engine is running: `docker ps` or check process
+2. Check port is correct (default: 8767)
+3. Verify firewall allows connection
+4. For Docker: Ensure port mapping is correct `-p 8767:8767`
+
+### Invalid audio format error
+
+**Symptom:** `/analyze` returns "Invalid audio format: expected WAV file"
+
+**Solution:**
+1. Verify audio is WAV format (not MP3, FLAC, etc.)
+2. Check base64 encoding is correct
+3. Minimum file size: 44 bytes (WAV header)
+4. File must have RIFF header signature
 
 ## Dependencies
 
@@ -222,7 +535,42 @@ pydantic==2.10.4
 | numpy | 2.0.0 | C-API changes, some deprecated functions removed |
 | pydantic | 3.0.0 | Not yet released, but Pydantic v1 support will be removed in near future |
 
+## Testing
+
+Validate your engine with the automated test suite:
+
+```bash
+# Run full API test suite
+python scripts/test_engine.py --port 8767 --verbose
+```
+
+Manual testing:
+
+```bash
+# Start service
+# Windows
+venv\Scripts\python.exe server.py --port 8767
+
+# Linux/Mac
+source venv/bin/activate
+python server.py --port 8767
+
+# Test analyze endpoint
+curl -X POST http://localhost:8767/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"audioBase64": "<base64_encoded_wav>", "language": "en"}'
+
+# Test health endpoint
+curl http://localhost:8767/health
+
+# Test model loading
+curl -X POST http://localhost:8767/load \
+  -H "Content-Type: application/json" \
+  -d '{"engineModelName": "small"}'
+```
+
 ## Documentation
 
 - [Engine Development Guide](../../docs/engine-development-guide.md) - Complete development guide
 - [Engine Server API](../../docs/engine-server-api.md) - API endpoint documentation
+- [Model Management Standard](../../docs/model-management.md) - Model storage and discovery

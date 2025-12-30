@@ -1,258 +1,408 @@
-# Chatterbox Multilingual TTS Engine
+# Chatterbox
 
-High-quality multilingual text-to-speech engine with voice cloning support.
+Resemble AI - Chatterbox TTS, SoTA open-source TTS
 
 ## Overview
 
-**Chatterbox** is a state-of-the-art multilingual TTS engine developed by Resemble AI. It supports 23 languages with natural-sounding speech synthesis and voice cloning capabilities.
+Chatterbox is a state-of-the-art multilingual text-to-speech engine developed by Resemble AI, supporting 23 languages with high-quality voice cloning capabilities. It uses a diffusion-based architecture with speaker conditioning to generate natural-sounding speech at 24kHz sample rate.
 
-## Features
-
-- **23 Languages**: Arabic, Chinese, Danish, Dutch, English, Finnish, French, German, Greek, Hebrew, Hindi, Italian, Japanese, Korean, Malay, Norwegian, Polish, Portuguese, Russian, Spanish, Swedish, Swahili, Turkish
-- **Voice Cloning**: Clone any voice from a reference audio sample
-- **High Quality**: 24kHz sample rate for natural-sounding speech
-- **GPU Accelerated**: CUDA support for faster generation
-- **Controllable**: Fine-tune exaggeration, temperature, and pacing
+**Key Features:**
+- 23 language support with natural multilingual voice cloning
+- High-quality 24kHz sample rate output
+- GPU acceleration with CUDA support
+- Controllable speech parameters (exaggeration, temperature, CFG weight)
+- Cross-language voice transfer capability
 
 ## Supported Languages
 
-| Code | Language   | Code | Language   | Code | Language   |
-|------|------------|------|------------|------|------------|
-| ar   | Arabic     | fi   | Finnish    | ms   | Malay      |
-| da   | Danish     | fr   | French     | nl   | Dutch      |
-| de   | German     | he   | Hebrew     | no   | Norwegian  |
-| el   | Greek      | hi   | Hindi      | pl   | Polish     |
-| en   | English    | it   | Italian    | pt   | Portuguese |
-| es   | Spanish    | ja   | Japanese   | ru   | Russian    |
-|      |            | ko   | Korean     | sv   | Swedish    |
-|      |            |      |            | sw   | Swahili    |
-|      |            |      |            | tr   | Turkish    |
-|      |            |      |            | zh   | Chinese    |
+| Code | Language   | Code | Language   | Code | Language   | Code | Language   |
+|------|------------|------|------------|------|------------|------|------------|
+| ar   | Arabic     | el   | Greek      | ja   | Japanese   | pt   | Portuguese |
+| da   | Danish     | en   | English    | ko   | Korean     | ru   | Russian    |
+| de   | German     | es   | Spanish    | ms   | Malay      | sv   | Swedish    |
+|      |            | fi   | Finnish    | nl   | Dutch      | sw   | Swahili    |
+|      |            | fr   | French     | no   | Norwegian  | tr   | Turkish    |
+|      |            | he   | Hebrew     | pl   | Polish     | zh   | Chinese    |
+|      |            | hi   | Hindi      |      |            |      |            |
+|      |            | it   | Italian    |      |            |      |            |
 
 ## Installation
 
-### Windows
+### Docker (Recommended)
 
 ```bash
-cd tts/chatterbox
-setup.bat
+docker pull ghcr.io/digijoe79/audiobook-maker-engines/chatterbox:latest
+docker run -d -p 8766:8766 --gpus all ghcr.io/digijoe79/audiobook-maker-engines/chatterbox:latest
 ```
 
-### Linux/Mac
+Note: Requires NVIDIA GPU with CUDA support. Use `--gpus all` to enable GPU acceleration.
+
+### Subprocess (Development)
 
 ```bash
+# Windows
+cd tts/chatterbox
+setup.bat
+
+# Linux/Mac
 cd tts/chatterbox
 chmod +x setup.sh
 ./setup.sh
 ```
 
-This will:
-1. Create an isolated virtual environment in `venv/`
-2. Install all dependencies (PyTorch, Chatterbox, etc.)
-3. Download the pretrained model automatically on first use
+The setup script will:
+1. Create isolated Python 3.11 virtual environment in `venv/`
+2. Install CUDA-enabled PyTorch 2.6.0
+3. Install chatterbox-tts with all dependencies
+4. Handle pkuseg build dependencies correctly
 
-## System Requirements
+Model files are automatically downloaded on first use (~2GB).
 
-- **Python**: 3.10-3.11 (tested with 3.11 on Debian 11)
-- **RAM**: 8GB minimum, 16GB recommended
-- **GPU**: Optional but recommended (CUDA 11.8/12.1/12.4 - uses PyTorch 2.6.0)
-- **Storage**: ~2GB for model weights
+## API Endpoints
+
+### Common Endpoints (from BaseEngineServer)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/load` | POST | Load a specific model |
+| `/models` | GET | List available models |
+| `/health` | GET | Health check with status and device info |
+| `/info` | GET | Engine metadata from engine.yaml |
+| `/shutdown` | POST | Graceful shutdown |
+
+### TTS Endpoints (from BaseTTSServer)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/generate` | POST | Generate audio from text |
+| `/samples/check` | POST | Check which speaker samples exist |
+| `/samples/upload/{sample_id}` | POST | Upload speaker sample WAV |
+
+## API Reference
+
+### POST /load
+
+Load the Chatterbox multilingual model into memory.
+
+**Request:**
+```json
+{
+  "engineModelName": "multilingual"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "loaded",
+  "engineModelName": "multilingual"
+}
+```
+
+### GET /health
+
+Check engine status and resource usage.
+
+**Response:**
+```json
+{
+  "status": "ready",
+  "engineModelLoaded": true,
+  "currentEngineModel": "multilingual",
+  "device": "cuda",
+  "packageVersion": "0.1.4",
+  "gpuMemoryUsedMb": 2048,
+  "gpuMemoryTotalMb": 8192
+}
+```
+
+### GET /models
+
+List available models.
+
+**Response:**
+```json
+{
+  "models": [
+    {
+      "name": "multilingual",
+      "displayName": "Multilingual (Pretrained)",
+      "languages": ["ar", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "it", "ja", "ko", "ms", "nl", "no", "pl", "pt", "ru", "sv", "sw", "tr", "zh"]
+    }
+  ]
+}
+```
+
+### POST /generate
+
+Generate TTS audio with voice cloning.
+
+**Request:**
+```json
+{
+  "text": "Hello, this is a test of the Chatterbox engine.",
+  "language": "en",
+  "ttsSpeakerWav": "speaker-uuid.wav",
+  "parameters": {
+    "exaggeration": 0.5,
+    "temperature": 0.8,
+    "cfgWeight": 0.5,
+    "seed": 0
+  }
+}
+```
+
+**Parameters:**
+- `text`: Text to synthesize (max 300 characters recommended)
+- `language`: Language code (e.g., "en", "de", "ja")
+- `ttsSpeakerWav`: Speaker sample filename (required for voice cloning) or array of filenames
+- `parameters`: Optional engine parameters (defaults used if omitted)
+
+**Response:** Binary WAV audio (Content-Type: audio/wav)
+
+**Error Responses:**
+```json
+{
+  "detail": "Chatterbox requires speaker samples for voice cloning. Upload samples via /samples/upload and include sample IDs in ttsSpeakerWav."
+}
+```
+
+### POST /samples/check
+
+Check which speaker samples exist in the engine.
+
+**Request:**
+```json
+{
+  "sampleIds": ["uuid-1", "uuid-2", "uuid-3"]
+}
+```
+
+**Response:**
+```json
+{
+  "missing": ["uuid-2"]
+}
+```
+
+### POST /samples/upload/{sample_id}
+
+Upload a speaker sample WAV file.
+
+**Request:** Binary WAV data in request body
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "sampleId": "uuid-1"
+}
+```
+
+## Configuration
+
+Parameters from `engine.yaml` (all optional, defaults applied if omitted):
+
+| Parameter | Type | Default | Range | Description |
+|-----------|------|---------|-------|-------------|
+| exaggeration | float | 0.5 | 0.25-2.0 | Speech expressiveness control (0.5=neutral, >1.0 may sound unstable) |
+| temperature | float | 0.8 | 0.05-5.0 | Randomness in generation (higher=more variation, may reduce quality) |
+| cfgWeight | float | 0.5 | 0.2-1.0 | Classifier-free guidance weight (0.0=cross-language transfer mode) |
+| seed | int | 0 | 0-2147483647 | Random seed for reproducible output (0=random each time) |
+
+### Parameter Usage Examples
+
+**Neutral speech (audiobook narration):**
+```json
+{
+  "exaggeration": 0.5,
+  "temperature": 0.8,
+  "cfgWeight": 0.5
+}
+```
+
+**Expressive speech (character dialogue):**
+```json
+{
+  "exaggeration": 1.2,
+  "temperature": 1.0,
+  "cfgWeight": 0.5
+}
+```
+
+**Cross-language voice transfer (English voice speaking German):**
+```json
+{
+  "exaggeration": 0.5,
+  "temperature": 0.8,
+  "cfgWeight": 0.0
+}
+```
+
+**Reproducible output:**
+```json
+{
+  "exaggeration": 0.5,
+  "temperature": 0.8,
+  "cfgWeight": 0.5,
+  "seed": 42
+}
+```
+
+## Available Models
+
+| Model | Description |
+|-------|-------------|
+| multilingual | Pretrained 23-language model with voice cloning (only model available) |
+
+Chatterbox currently supports a single pretrained multilingual model that handles all 23 languages.
+
+## Voice Cloning Best Practices
+
+**Speaker Sample Requirements:**
+- Audio length: 3-10 seconds recommended
+- Quality: High-quality, noise-free recordings work best
+- Format: Mono or stereo WAV files
+- Language matching: Reference audio should match target language (or use `cfgWeight: 0.0` for cross-language transfer)
+
+**Upload Process:**
+1. Generate unique sample ID (UUID recommended)
+2. Upload WAV via `POST /samples/upload/{sample_id}`
+3. Include `{sample_id}.wav` in `ttsSpeakerWav` field when generating
+
+**Cross-Language Voice Transfer:**
+Set `cfgWeight: 0.0` to clone a voice across languages (e.g., use English reference audio to speak German text).
+
+## Troubleshooting
+
+### Model not loading
+
+**Symptom:** `/load` returns error or timeout
+
+**Solution:**
+1. Verify internet connection for initial model download (~2GB)
+2. Check available disk space (minimum 4GB free)
+3. Check logs for download errors from HuggingFace
+4. Verify CUDA drivers installed if using GPU
+
+### GPU Out of Memory
+
+**Symptom:** Generation fails with CUDA OOM error
+
+**Solution:**
+1. Reduce text length (use shorter segments, max 300 chars recommended)
+2. Restart engine to clear GPU memory: `POST /shutdown` then restart
+3. Close other GPU-intensive applications
+4. Consider using CPU mode if GPU has insufficient memory (<4GB VRAM)
+
+### Poor Quality Output
+
+**Symptom:** Generated audio sounds robotic or unnatural
+
+**Solution:**
+1. Verify reference audio matches target language (or set `cfgWeight: 0.0` for cross-language)
+2. Reduce `exaggeration` parameter (try 0.3-0.7 range)
+3. Use higher-quality speaker samples (noise-free, clear speech)
+4. Add punctuation to text for better prosody
+5. Keep text segments under 300 characters
+
+### pkuseg Build Failure
+
+**Symptom:** `ModuleNotFoundError: No module named 'numpy'` during installation
+
+**Solution:**
+The setup scripts handle this automatically. For manual installation:
+```bash
+pip install "numpy>=1.24.0,<1.26.0" cython
+pip install --no-build-isolation chatterbox-tts
+```
+
+The `--no-build-isolation` flag allows pkuseg to find numpy in the environment.
+
+### Connection refused
+
+**Symptom:** Cannot connect to engine endpoint
+
+**Solution:**
+1. Verify engine is running: `docker ps` or check process
+2. Check port is correct (default 8766)
+3. Verify firewall allows connection on port 8766
+4. Check logs for startup errors: `docker logs <container_id>`
 
 ## Dependencies
 
 ### Versioning Decisions (2025-12-05)
 
 | Package | Version | Rationale |
-|---------|---------|------------|
-| chatterbox-tts | >=0.1.4,<0.2.0 | Latest stable, pins strict internal deps |
-| torch | ==2.6.0 | Pinned by chatterbox-tts (cannot override) |
-| torchaudio | ==2.6.0 | Pinned by chatterbox-tts (cannot override) |
-| transformers | ==4.46.3 | Pinned by chatterbox-tts (cannot override) |
-| numpy | >=1.24.0,<1.26.0 | Range required by chatterbox-tts |
+|---------|---------|-----------|
+| chatterbox-tts | >=0.1.4,<0.2.0 | Latest stable release with strict internal dependency pinning |
+| torch | ==2.6.0 | Pinned by chatterbox-tts, supports CUDA 11.8/12.1/12.4 |
+| torchaudio | ==2.6.0 | Pinned by chatterbox-tts, must match torch version |
+| transformers | ==4.46.3 | Pinned by chatterbox-tts for model compatibility |
+| diffusers | ==0.29.0 | Pinned by chatterbox-tts for diffusion model support |
+| numpy | >=1.24.0,<1.26.0 | Range required by chatterbox-tts, incompatible with Python 3.12 |
 | fastapi | >=0.115.0,<1.0.0 | Latest stable server stack |
 | uvicorn | >=0.32.0,<1.0.0 | Latest stable ASGI server |
-| pydantic | >=2.10.0,<3.0.0 | Latest 2.x, v3 may break |
-| scipy | >=1.11.0,<2.0.0 | Audio resampling utilities |
-
-### Pinned Dependencies (from chatterbox-tts)
-
-**These versions are enforced by chatterbox-tts and cannot be changed:**
-
-| Package | Pinned Version | Notes |
-|---------|---------------|-------|
-| torch | 2.6.0 | CUDA 11.8/12.1/12.4 supported |
-| torchaudio | 2.6.0 | Must match torch version |
-| transformers | 4.46.3 | Specific HuggingFace version |
-| librosa | 0.11.0 | Audio processing |
-| diffusers | 0.29.0 | Diffusion model support |
-| safetensors | 0.5.3 | Model serialization |
-| gradio | 5.44.1 | Demo UI (not used by engine) |
-
-### Compatibility Matrix
-
-| chatterbox-tts | PyTorch | Transformers | Python | CUDA |
-|----------------|---------|--------------|--------|------|
-| 0.1.4 | 2.6.0 | 4.46.3 | 3.10-3.11 | 11.8, 12.1, 12.4 |
+| pydantic | >=2.10.0,<3.0.0 | Latest 2.x, v3 may introduce breaking changes |
+| scipy | >=1.11.0,<2.0.0 | Audio resampling and processing utilities |
 
 ### Upgrade Notes
 
-#### Why Python 3.11?
-- Tested and recommended by Resemble AI
-- numpy <1.26.0 constraint has better 3.11 support
-- Python 3.12+ may have compatibility issues with pkuseg
+**chatterbox-tts:**
+- Enforces strict version pinning for torch, transformers, diffusers, librosa, safetensors
+- Cannot independently update PyTorch or transformers versions
+- Includes gradio dependency (not used by engine server)
+- Requires `--no-deps` flag during installation to preserve CUDA-enabled PyTorch
 
-#### CUDA Installation
-The `setup.bat` script automatically installs PyTorch with CUDA 12.4 support.
+**Python Version:**
+- Python 3.11 required (3.10-3.11 supported)
+- Python 3.12+ incompatible due to numpy <1.26.0 constraint
+- Recommended by Resemble AI for best compatibility
 
-For manual installation with GPU acceleration:
+**CUDA Installation:**
+Setup scripts automatically install PyTorch with CUDA 12.4 support:
 ```bash
-pip install --upgrade pip setuptools wheel
-pip install "numpy>=1.24.0,<1.26.0" cython
 pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
-pip install --no-build-isolation --no-deps chatterbox-tts
-pip install --no-build-isolation transformers==4.46.3 diffusers==0.29.0 librosa==0.11.0 safetensors==0.5.3 conformer==0.3.2 resemble-perth==1.0.1 s3tokenizer pykakasi==2.3.0 spacy-pkuseg
-pip install fastapi uvicorn pydantic loguru httpx scipy
 ```
 
-The `--no-deps` flag prevents chatterbox-tts from overwriting CUDA PyTorch with CPU-only version.
-
-#### Known Limitations
-- Cannot update PyTorch independently (pinned by upstream)
-- Cannot update transformers independently (pinned by upstream)
-- gradio dependency included but not used by engine server
-
-#### pkuseg Build Issue
-The `pkuseg` dependency requires numpy at build time. If you see:
-```
-ModuleNotFoundError: No module named 'numpy'
-```
-
-**Solution:** Install numpy first, then use `--no-build-isolation`:
+**Manual Installation (Advanced):**
 ```bash
+# 1. Install build dependencies
 pip install --upgrade pip setuptools wheel
 pip install "numpy>=1.24.0,<1.26.0" cython
-pip install --no-build-isolation chatterbox-tts
+
+# 2. Install CUDA PyTorch FIRST
+pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+
+# 3. Install chatterbox-tts without overwriting dependencies
+pip install --no-build-isolation --no-deps chatterbox-tts
+
+# 4. Install remaining chatterbox dependencies
+pip install --no-build-isolation transformers==4.46.3 diffusers==0.29.0 librosa==0.11.0 \
+  safetensors==0.5.3 conformer==0.3.2 resemble-perth==1.0.1 s3tokenizer \
+  pykakasi==2.3.0 spacy-pkuseg
+
+# 5. Install server stack
+pip install fastapi uvicorn pydantic loguru httpx PyYAML scipy
 ```
 
-The `--no-build-isolation` flag allows pkuseg to find numpy in the current
-environment instead of pip's isolated build environment.
+The `--no-deps` flag prevents chatterbox-tts from installing CPU-only PyTorch.
 
-The `setup.bat` script handles this automatically.
-
-See: [GitHub Issue #231](https://github.com/resemble-ai/chatterbox/issues/231)
-
-## Parameters
-
-The following parameters can be passed via the `parameters` field in generation requests:
-
-| Parameter     | Type  | Default | Range      | Description                                    |
-|---------------|-------|---------|------------|------------------------------------------------|
-| `exaggeration`| float | 0.5     | 0.25 - 2.0 | Speech expressiveness (neutral=0.5)            |
-| `temperature` | float | 0.8     | 0.05 - 5.0 | Randomness in generation (higher=more varied)  |
-| `cfg_weight`  | float | 0.5     | 0.0 - 1.0  | CFG/Pace weight (0=language transfer mode)     |
-| `seed`        | int   | 0       | 0+         | Random seed (0=random generation)              |
-
-### Parameter Notes
-
-- **Exaggeration**: Controls how expressive the speech is. Values above 1.0 can sound unstable.
-- **Temperature**: Higher values produce more variation but may reduce quality.
-- **CFG Weight**: Set to 0 for cross-language voice transfer (e.g., English voice speaking German).
-- **Seed**: Use non-zero values for reproducible results.
-
-## Voice Cloning
-
-Provide a reference audio file via `speaker_wav` parameter:
-
-```python
-# Single reference file
-speaker_wav = "/path/to/reference.wav"
-
-# Or list of files (first will be used)
-speaker_wav = ["/path/to/reference1.wav", "/path/to/reference2.wav"]
-```
-
-**Best Practices:**
-- Use 3-10 second audio clips
-- Ensure reference audio matches the target language (or set `cfg_weight=0` for cross-language)
-- Use high-quality, noise-free recordings
-- Mono or stereo audio works
-
-## Text Recommendations
-
-- **Max Length**: 300 characters per generation (recommended)
-- **Punctuation**: Not required but recommended for natural prosody
-- **Languages**: Ensure text matches the selected language code
-
-## Technical Details
-
-- **Model**: Chatterbox Multilingual v0.1.4
-- **Architecture**: Diffusion-based TTS with speaker conditioning
-- **Sample Rate**: 24,000 Hz
-- **Output Format**: WAV (PCM 16-bit)
-- **License**: Apache 2.0
-
-## Credits
-
-Chatterbox is developed by **Resemble AI**.
-GitHub: https://github.com/resemble-ai/chatterbox
-
-## Troubleshooting
-
-### Model Download Issues
-
-The model downloads automatically on first use. If it fails:
-- Check internet connection
-- Ensure sufficient storage (~2GB)
-- Try running `python -c "from chatterbox.mtl_tts import ChatterboxMultilingualTTS; ChatterboxMultilingualTTS.from_pretrained('cpu')"`
-
-### CUDA Out of Memory
-
-If you encounter GPU memory errors:
-- Reduce text length (use shorter segments)
-- Set device to CPU in backend settings
-- Close other GPU applications
-
-### Poor Quality Output
-
-- Check that reference audio matches language (or use `cfg_weight=0`)
-- Try adjusting `exaggeration` (lower for neutral, higher for expressive)
-- Ensure text is properly formatted with punctuation
-- Use higher-quality reference audio
-
-## Development
-
-### Testing Standalone
+## Testing
 
 ```bash
-# Windows
-venv\Scripts\python.exe server.py --port 8766
+# Start engine
+python server.py --port 8766 --host 127.0.0.1
 
-# Linux/Mac
-venv/bin/python server.py --port 8766
-```
-
-### API Endpoints
-
-- `POST /load` - Load model
-- `POST /generate` - Generate TTS audio
-- `GET /health` - Health check
-- `GET /info` - Engine metadata
-- `GET /models` - Available models
-- `POST /shutdown` - Graceful shutdown
-
-See [docs/engine-server-api.md](../../docs/engine-server-api.md) for API documentation.
-
-### Automated Testing
-
-```bash
-# Run full API test suite
+# Run test suite
 python scripts/test_engine.py --port 8766 --verbose
 ```
 
-## References
+## Documentation
 
-- [Chatterbox GitHub](https://github.com/resemble-ai/chatterbox)
-- [chatterbox-tts (PyPI)](https://pypi.org/project/chatterbox-tts/)
-- [Resemble AI](https://www.resemble.ai/)
-- [HuggingFace Model](https://huggingface.co/ResembleAI/chatterbox)
 - [Engine Development Guide](../../docs/engine-development-guide.md)
+- [Engine Server API](../../docs/engine-server-api.md)
+- [Model Management Standard](../../docs/model-management.md)
+- [Chatterbox GitHub](https://github.com/resemble-ai/chatterbox)
+- [Chatterbox PyPI](https://pypi.org/project/chatterbox-tts/)
+- [HuggingFace Model](https://huggingface.co/ResembleAI/chatterbox)

@@ -104,10 +104,6 @@ docker build -t audiobook-maker/debug-tts:latest -f tts/debug-tts/Dockerfile .
 docker build -t audiobook-maker/vibevoice:latest -f tts/vibevoice/Dockerfile .
 ```
 
-## Adding a New Engine
-
-See [CLAUDE.md](CLAUDE.md) for detailed instructions on adding new engines.
-
 ## License
 
 MIT License - see [LICENSE](LICENSE)
