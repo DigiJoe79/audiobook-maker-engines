@@ -99,15 +99,8 @@ class BaseTextServer(BaseEngineServer):
         async def segment_endpoint(request: SegmentRequest):
             """Segment text into TTS-ready chunks"""
             try:
-                # Return 503 if model is still loading (non-blocking response)
-                if self.status == "loading":
-                    raise HTTPException(
-                        status_code=503,
-                        detail="Model loading in progress. Retry after loading completes."
-                    )
-
-                if not self.model_loaded:
-                    raise HTTPException(status_code=400, detail="Model not loaded")
+                # Validate model is loaded and ready
+                self._require_model_ready()
 
                 # Validate text input
                 if not request.text or not request.text.strip():

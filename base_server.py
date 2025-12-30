@@ -674,6 +674,25 @@ class BaseEngineServer(ABC):
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
+    def _require_model_ready(self) -> None:
+        """
+        Validate that a model is loaded and ready for processing.
+
+        This centralizes the common check pattern used by all processing endpoints
+        (generate, analyze, segment). Called at the start of each request handler.
+
+        Raises:
+            HTTPException: 503 if model is still loading
+            HTTPException: 400 if no model is loaded
+        """
+        if self.status == "loading":
+            raise HTTPException(
+                status_code=503,
+                detail="Model loading in progress. Retry after loading completes."
+            )
+        if not self.model_loaded:
+            raise HTTPException(status_code=400, detail="Model not loaded")
+
     # ============= Server Lifecycle =============
 
     def run(self, port: int, host: str = "127.0.0.1"):

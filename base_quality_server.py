@@ -215,15 +215,8 @@ class BaseQualityServer(BaseEngineServer):
         async def analyze_endpoint(request: AnalyzeRequest):
             """Analyze audio and return quality metrics"""
             try:
-                # Return 503 if model is still loading (non-blocking response)
-                if self.status == "loading":
-                    raise HTTPException(
-                        status_code=503,
-                        detail="Model loading in progress. Retry after loading completes."
-                    )
-
-                if not self.model_loaded:
-                    raise HTTPException(status_code=400, detail="Model not loaded")
+                # Validate model is loaded and ready
+                self._require_model_ready()
 
                 # Get audio data
                 audio_bytes = None
