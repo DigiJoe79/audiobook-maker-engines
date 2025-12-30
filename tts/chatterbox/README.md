@@ -60,9 +60,9 @@ This will:
 
 ## Dependencies
 
-### Versioning Decisions (Stand: 2025-12-05)
+### Versioning Decisions (2025-12-05)
 
-| Package | Version | Begründung |
+| Package | Version | Rationale |
 |---------|---------|------------|
 | chatterbox-tts | >=0.1.4,<0.2.0 | Latest stable, pins strict internal deps |
 | torch | ==2.6.0 | Pinned by chatterbox-tts (cannot override) |
@@ -88,7 +88,7 @@ This will:
 | safetensors | 0.5.3 | Model serialization |
 | gradio | 5.44.1 | Demo UI (not used by engine) |
 
-### Kompatibilitätsmatrix
+### Compatibility Matrix
 
 | chatterbox-tts | PyTorch | Transformers | Python | CUDA |
 |----------------|---------|--------------|--------|------|

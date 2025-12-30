@@ -22,9 +22,9 @@ The original Coqui AI `TTS` package (PyPI: `TTS`) was abandoned in December 2023
 
 The import remains unchanged (`from TTS import ...`), ensuring backward compatibility.
 
-### Versioning Decisions (Stand: 2025-12-05)
+### Versioning Decisions (2025-12-05)
 
-| Package | Version | Begründung |
+| Package | Version | Rationale |
 |---------|---------|------------|
 | coqui-tts | >=0.27.0,<0.28.0 | Latest stable from maintained Idiap fork. Requires transformers >4.52.1 |
 | torch | >=2.5.0,<2.6.0 | Stable release with CUDA 11.8/12.1/12.4 support. coqui-tts requires >2.1,<2.9 |
@@ -36,7 +36,7 @@ The import remains unchanged (`from TTS import ...`), ensuring backward compatib
 | loguru | >=0.7.2,<0.8.0 | Stable, rarely updated |
 | httpx | >=0.28.0,<1.0.0 | Latest stable async HTTP client |
 
-### Kompatibilitätsmatrix
+### Compatibility Matrix
 
 | coqui-tts | PyTorch | Transformers | Python | CUDA |
 |-----------|---------|--------------|--------|------|

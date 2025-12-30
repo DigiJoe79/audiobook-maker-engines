@@ -165,20 +165,20 @@ The service uses modern Python features and PyTorch 2.x compatibility.
 - NumPy 2.1+
 - ffmpeg (system requirement)
 
-### Versioning Decisions (Stand: 2025-12-04)
+### Versioning Decisions (2025-12-04)
 
-| Package | Version | Begründung |
-|---------|---------|------------|
+| Package | Version | Rationale |
+|---------|---------|-----------|
 | openai-whisper | >=20250625 | Latest stable (June 2025). Date-based versioning (YYYYMMDD). |
-| torch | >=2.5.0,<3.0.0 | Range erlaubt 2.5.x-2.9.x. CUDA 11.8/12.x Support ab 2.5. |
-| torchaudio | >=2.5.0,<3.0.0 | **MUSS** zu torch passen. ⚠️ 2.9: Maintenance-Mode, deprecated APIs entfernt. |
-| numpy | >=2.1.0 | 2.1+ für Python 3.12 Verbesserungen. Latest: 2.3.5 (Nov 2025). |
-| fastapi | >=0.120.0 | Pydantic 2.12 Kompatibilität. Latest: 0.123.0 (Nov 2025). |
+| torch | >=2.5.0,<3.0.0 | Range allows 2.5.x-2.9.x. CUDA 11.8/12.x support from 2.5. |
+| torchaudio | >=2.5.0,<3.0.0 | **MUST** match torch version. 2.9: Maintenance mode, deprecated APIs removed. |
+| numpy | >=2.1.0 | 2.1+ for Python 3.12 improvements. Latest: 2.3.5 (Nov 2025). |
+| fastapi | >=0.120.0 | Pydantic 2.12 compatibility. Latest: 0.123.0 (Nov 2025). |
 | uvicorn | >=0.34.0 | Python 3.13/3.14 Support. Latest: 0.38.0 (Oct 2025). |
 | pydantic | >=2.10.0,<3.0.0 | Pydantic 2.x line. Latest: 2.12.5 (Nov 2025). |
-| pydub | >=0.25.1 | Keine Updates seit März 2021 - Projekt stabil aber inaktiv. |
-| loguru | >=0.7.0,<1.0.0 | Latest: 0.7.3 (2025). Keine Breaking Changes erwartet. |
-| pyyaml | >=6.0.1 | 6.0.1 behebt LibYAML Cython Build-Problem. |
+| pydub | >=0.25.1 | No updates since March 2021 - project stable but inactive. |
+| loguru | >=0.7.0,<1.0.0 | Latest: 0.7.3 (2025). No breaking changes expected. |
+| pyyaml | >=6.0.1 | 6.0.1 fixes LibYAML Cython build issue. |
 
 ### Upgrade Notes
 
@@ -190,20 +190,20 @@ The service uses modern Python features and PyTorch 2.x compatibility.
 - Previous release was v20240930 (September 2024)
 
 **PyTorch / torchaudio:**
-- **KRITISCH:** torch und torchaudio Versionen müssen identisch sein!
-- PyTorch 2.9.1 (Nov 2025) ist aktuell, aber torchaudio 2.9 hat Breaking Changes
-- torchaudio 2.9 ist im Maintenance-Mode - deprecated APIs wurden entfernt
-- Empfehlung: Bei Problemen auf 2.8.x downgraden: `pip install torch==2.8.0 torchaudio==2.8.0`
-- CUDA: 2.5+ unterstützt CUDA 11.8 und 12.x
+- **CRITICAL:** torch and torchaudio versions must be identical!
+- PyTorch 2.9.1 (Nov 2025) is current, but torchaudio 2.9 has breaking changes
+- torchaudio 2.9 is in maintenance mode - deprecated APIs were removed
+- Recommendation: If you encounter issues, downgrade to 2.8.x: `pip install torch==2.8.0 torchaudio==2.8.0`
+- CUDA: 2.5+ supports CUDA 11.8 and 12.x
 - Set device to "cuda" in engine.yaml for GPU acceleration
 
 **NumPy:**
-- NumPy 2.x hat Breaking Changes gegenüber 1.x (C-API, Deprecations)
-- 2.1+ empfohlen für Python 3.12
+- NumPy 2.x has breaking changes compared to 1.x (C-API, deprecations)
+- 2.1+ recommended for Python 3.12
 
 ### Tested Configuration
 
-Diese Konfiguration wurde getestet und funktioniert:
+This configuration has been tested and works:
 ```
 openai-whisper==20250625
 torch==2.5.1
@@ -216,11 +216,11 @@ pydantic==2.10.4
 
 ### Breaking Changes Watch
 
-| Package | Version | Änderung |
-|---------|---------|----------|
-| torchaudio | 2.9.0 | Maintenance-Mode, `torchaudio.load()`/`save()` nutzen jetzt TorchCodec |
-| numpy | 2.0.0 | C-API Änderungen, einige deprecated Funktionen entfernt |
-| pydantic | 3.0.0 | Noch nicht released, aber Pydantic v1 Support entfernt in naher Zukunft |
+| Package | Version | Change |
+|---------|---------|--------|
+| torchaudio | 2.9.0 | Maintenance mode, `torchaudio.load()`/`save()` now use TorchCodec |
+| numpy | 2.0.0 | C-API changes, some deprecated functions removed |
+| pydantic | 3.0.0 | Not yet released, but Pydantic v1 support will be removed in near future |
 
 ## Documentation
 

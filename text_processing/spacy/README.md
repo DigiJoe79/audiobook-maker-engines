@@ -204,16 +204,16 @@ python -m spacy download es_core_news_md  # Spanish
 
 ### Versioning Decisions (2025-12-05)
 
-| Package | Version | Begründung |
-|---------|---------|------------|
-| spacy | >=3.8.7,<4.0.0 | 3.8.11 aktuell. Major 4.x ausgeschlossen für Stabilität |
-| fastapi | >=0.120.0 | Aligned mit Whisper Engine |
-| uvicorn | >=0.34.0 | Aligned mit Whisper Engine |
-| pydantic | >=2.10.0,<3.0.0 | v2 API stabil, v3 würde Breaking Changes bringen |
-| loguru | >=0.7.0,<1.0.0 | API stabil |
-| pyyaml | >=6.0.1 | 6.0.1 behebt Cython Build-Issue |
+| Package | Version | Rationale |
+|---------|---------|-----------|
+| spacy | >=3.8.7,<4.0.0 | 3.8.11 current. Major 4.x excluded for stability |
+| fastapi | >=0.120.0 | Aligned with Whisper Engine |
+| uvicorn | >=0.34.0 | Aligned with Whisper Engine |
+| pydantic | >=2.10.0,<3.0.0 | v2 API stable, v3 would bring breaking changes |
+| loguru | >=0.7.0,<1.0.0 | API stable |
+| pyyaml | >=6.0.1 | 6.0.1 fixes Cython build issue |
 
-### Kompatibilitätsmatrix
+### Compatibility Matrix
 
 | spaCy | Python | NumPy |
 |-------|--------|-------|
