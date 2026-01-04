@@ -51,8 +51,10 @@ class XTTSServer(BaseTTSServer):
         models = []
 
         if not self.models_dir.exists():
+            logger.debug(f"[xtts] Models directory does not exist: {self.models_dir}")
             return models
 
+        logger.debug(f"[xtts] Scanning models directory: {self.models_dir}")
         for model_dir in self.models_dir.iterdir():
             if not model_dir.is_dir():
                 continue
@@ -67,7 +69,9 @@ class XTTSServer(BaseTTSServer):
                 display_name=model_dir.name.replace("_", " ").title(),
                 languages=self.SUPPORTED_LANGUAGES  # All XTTS models are multilingual
             ))
+            logger.debug(f"[xtts] Found valid model: {model_dir.name}")
 
+        logger.debug(f"[xtts] Total models found: {len(models)}")
         return models
 
     def load_model(self, model_name: str) -> None:
@@ -87,6 +91,8 @@ class XTTSServer(BaseTTSServer):
                 detail=f"Invalid model '{model_name}': config.json not found."
             )
 
+        logger.debug(f"[xtts] Loading config from {config_path}")
+
         # Load config
         config = XttsConfig()
         config.load_json(str(config_path))
@@ -95,17 +101,20 @@ class XTTSServer(BaseTTSServer):
         self.model = Xtts.init_from_config(config)
 
         # Load checkpoint
+        logger.debug(f"[xtts] Loading checkpoint from {model_path}")
         self.model.load_checkpoint(
             config,
             use_deepspeed=False,
             checkpoint_dir=str(model_path)
         )
+        logger.debug("[xtts] Checkpoint loaded successfully")
 
         # Move to device
         self.model.to(self.device)
 
         # Clear latents cache (new model = new latents)
         self.latents_cache.clear()
+        logger.debug(f"[xtts] Model loaded on {self.device}, latents cache cleared")
 
     def generate_audio(
         self,
@@ -131,11 +140,13 @@ class XTTSServer(BaseTTSServer):
         speaker_key = speaker_wav if isinstance(speaker_wav, str) else str(speaker_wav)
 
         if speaker_key not in self.latents_cache:
+            logger.debug(f"[xtts] Creating latents for speaker: {speaker_key}")
             try:
                 gpt_cond_latent, speaker_embedding = self.model.get_conditioning_latents(
                     speaker_path
                 )
                 self.latents_cache[speaker_key] = (gpt_cond_latent, speaker_embedding)
+                logger.debug(f"[xtts] Latents cached for: {speaker_key}")
             except Exception as e:
                 logger.error(f"Failed to create latents for speaker {speaker_path}: {e}")
                 raise HTTPException(
@@ -144,6 +155,7 @@ class XTTSServer(BaseTTSServer):
                 )
 
         gpt_cond_latent, speaker_embedding = self.latents_cache[speaker_key]
+        logger.debug(f"[xtts] Using cached latents for: {speaker_key}")
 
         # Extract parameters with defaults (explicit type conversion for safety)
         temperature = float(parameters.get('temperature', 0.75))
@@ -152,6 +164,11 @@ class XTTSServer(BaseTTSServer):
         repetition_penalty = float(parameters.get('repetition_penalty', 5.0))
         top_k = int(parameters.get('top_k', 50))
         top_p = float(parameters.get('top_p', 0.85))
+
+        logger.debug(
+            f"[xtts] Generate params | temp={temperature}, speed={speed}, "
+            f"top_k={top_k}, top_p={top_p}, rep_penalty={repetition_penalty}"
+        )
 
         # Generate audio
         # Note: max_text_length (250 chars) ensures we stay under XTTS's 400 token limit
@@ -179,17 +196,21 @@ class XTTSServer(BaseTTSServer):
             format="wav"
         )
 
+        logger.debug(f"[xtts] Generated {len(buffer.getvalue())} bytes WAV")
         return buffer.getvalue()
 
     def unload_model(self) -> None:
         """Unload model and free VRAM"""
         # Clear latents cache with explicit tensor deletion
         if hasattr(self, 'latents_cache') and self.latents_cache:
+            cache_size = len(self.latents_cache)
+            logger.debug(f"[xtts] Clearing latents cache ({cache_size} entries)")
             for key in list(self.latents_cache.keys()):
                 latents = self.latents_cache.get(key)
                 if latents is not None:
                     del latents
             self.latents_cache.clear()
+            logger.debug("[xtts] Latents cache cleared")
 
         # Delete model
         if self.model is not None:

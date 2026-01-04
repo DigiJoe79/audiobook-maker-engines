@@ -121,6 +121,7 @@ class VibeVoiceServer(BaseTTSServer):
 
     def get_available_models(self) -> List[ModelInfo]:
         """Return available VibeVoice models (1.5B and 7B with voice cloning)"""
+        logger.debug("[vibevoice] Returning available models (1.5B, 7B)")
         return [
             ModelInfo(
                 name="1.5B",
@@ -199,9 +200,11 @@ class VibeVoiceServer(BaseTTSServer):
                     logger.info(f"[vibevoice] Downloading model to {external_path}...")
                     from huggingface_hub import snapshot_download
                     snapshot_download(model_id, local_dir=str(external_path))
+                    logger.debug(f"[vibevoice] Download complete: {external_path}")
                 # Create symlink from models_dir to external_models_dir
                 logger.info(f"[vibevoice] Creating symlink: {model_path} -> {external_path}")
                 model_path.symlink_to(external_path)
+                logger.debug("[vibevoice] Symlink created successfully")
 
             logger.info(f"[vibevoice] Loading model with dtype={load_dtype}...")
 
@@ -358,6 +361,8 @@ class VibeVoiceServer(BaseTTSServer):
             if do_sample:
                 gen_config['temperature'] = temperature
                 gen_config['top_p'] = top_p
+
+            logger.debug(f"[vibevoice] Generation config: cfg_scale={cfg_scale}, gen_config={gen_config}")
 
             outputs = self.model.generate(
                 **tensor_inputs,

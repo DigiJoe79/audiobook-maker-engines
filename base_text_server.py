@@ -91,6 +91,7 @@ class BaseTextServer(BaseEngineServer):
         self._setup_segment_route()
 
         logger.info(f"[{self.engine_name}] Text server initialized")
+        logger.debug(f"[{self.engine_name}] Segment endpoint ready at /segment")
 
     def _setup_segment_route(self):
         """Setup text-specific /segment endpoint"""
@@ -101,6 +102,13 @@ class BaseTextServer(BaseEngineServer):
             try:
                 # Validate model is loaded and ready
                 self._require_model_ready()
+
+                logger.debug(
+                    f"[{self.engine_name}] Segment request received | "
+                    f"Text length: {len(request.text)} chars | "
+                    f"Language: {request.language} | "
+                    f"Max: {request.max_length}, Min: {request.min_length}"
+                )
 
                 # Validate text input
                 if not request.text or not request.text.strip():
@@ -121,6 +129,8 @@ class BaseTextServer(BaseEngineServer):
                         detail="min_length must be less than max_length"
                     )
 
+                logger.debug(f"[{self.engine_name}] Input validation passed")
+
                 logger.info(
                     f"[{self.engine_name}] Segmenting text | "
                     f"Model: {self.current_model} | "
@@ -130,6 +140,7 @@ class BaseTextServer(BaseEngineServer):
                 )
 
                 self.status = "processing"
+                logger.debug(f"[{self.engine_name}] Status transition: ready -> processing")
 
                 # Call engine-specific implementation in thread pool
                 # This prevents blocking the event loop during segmentation
@@ -150,6 +161,15 @@ class BaseTextServer(BaseEngineServer):
                 # Calculate totals
                 total_chars = sum(len(seg.text) for seg in segments)
                 failed_count = sum(1 for seg in segments if seg.status == "failed")
+                logger.debug(
+                    f"[{self.engine_name}] Segment totals | "
+                    f"Count: {len(segments)} | Chars: {total_chars} | Failed: {failed_count}"
+                )
+
+                logger.debug(
+                    f"[{self.engine_name}] Segment sizes: "
+                    f"{[len(seg.text) for seg in segments[:5]]}{'...' if len(segments) > 5 else ''}"
+                )
 
                 logger.info(
                     f"[{self.engine_name}] Segmentation complete | "

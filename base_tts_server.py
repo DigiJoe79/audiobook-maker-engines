@@ -130,6 +130,7 @@ class BaseTTSServer(BaseEngineServer):
                 detail="Invalid sample path"
             )
 
+        logger.debug(f"[{self.engine_name}] Sample ID validated: {sample_id}")
         return sample_path
 
     def _validate_speaker_wav(self, filename: str) -> Path:
@@ -174,6 +175,7 @@ class BaseTTSServer(BaseEngineServer):
                 detail="Invalid speaker path"
             )
 
+        logger.debug(f"[{self.engine_name}] Speaker WAV validated: {filename}")
         return sample_path
 
     def _setup_generate_route(self):
@@ -185,6 +187,12 @@ class BaseTTSServer(BaseEngineServer):
             try:
                 # Validate model is loaded and ready
                 self._require_model_ready()
+
+                logger.debug(
+                    f"[{self.engine_name}] Generate request | "
+                    f"Text: {len(request.text)} chars | "
+                    f"Language: {request.language}"
+                )
 
                 # Validate text input
                 if not request.text or not request.text.strip():
@@ -210,6 +218,7 @@ class BaseTTSServer(BaseEngineServer):
                         [request.tts_speaker_wav] if isinstance(request.tts_speaker_wav, str)
                         else request.tts_speaker_wav
                     )
+                    logger.debug(f"[{self.engine_name}] Validating {len(samples_to_check)} speaker sample(s)")
                     for sample in samples_to_check:
                         if sample and sample.strip():
                             # Validate filename format and path
@@ -219,11 +228,13 @@ class BaseTTSServer(BaseEngineServer):
                                     status_code=404,
                                     detail=f"Speaker sample not found: {sample}"
                                 )
+                            logger.debug(f"[{self.engine_name}] Speaker sample exists: {sample}")
 
                 # Validate speaker samples required for cloning engines
                 supports_cloning = self._engine_config.get("capabilities", {}).get(
                     "supports_speaker_cloning", False
                 )
+                logger.debug(f"[{self.engine_name}] Cloning support: {supports_cloning}")
                 if supports_cloning:
                     has_samples = bool(
                         request.tts_speaker_wav and
@@ -240,9 +251,11 @@ class BaseTTSServer(BaseEngineServer):
                 # Clear previous error state on new request
                 self.error_message = None
                 self.status = "processing"
+                logger.debug(f"[{self.engine_name}] Status transition: ready -> processing")
 
                 # Normalize parameters (null/None -> empty dict, engine applies its defaults)
                 parameters = request.parameters or {}
+                logger.debug(f"[{self.engine_name}] Parameters: {parameters}")
 
                 # Format speaker for logging (basename only, not full path)
                 if isinstance(request.tts_speaker_wav, str):
@@ -272,6 +285,7 @@ class BaseTTSServer(BaseEngineServer):
                 )
 
                 self.status = "ready"
+                logger.debug(f"[{self.engine_name}] Generated {len(audio_bytes)} bytes WAV")
 
                 # Return binary audio
                 return Response(content=audio_bytes, media_type="audio/wav")

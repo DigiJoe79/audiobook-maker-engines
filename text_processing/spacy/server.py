@@ -258,6 +258,7 @@ class SpacyServer(BaseTextServer):
         try:
             import spacy.util
             installed_models = spacy.util.get_installed_models()
+            logger.debug(f"[spacy] Found {len(installed_models)} installed models")
 
             models = []
             for model_name in sorted(installed_models):
@@ -394,12 +395,15 @@ class SpacyServer(BaseTextServer):
         """
         # Load model with pipeline optimization (CPU only, no CUDA)
         # Try to use senter instead of parser for faster processing
+        logger.debug("[spacy] Attempting to load with exclude=['parser'] for senter optimization")
         try:
             self.nlp = spacy.load(model_path_or_name, exclude=["parser"])
             if "senter" in self.nlp.pipe_names:
                 self.nlp.enable_pipe("senter")
+                logger.debug("[spacy] Enabled senter pipe")
             elif self.nlp.has_pipe("senter"):
                 self.nlp.enable_pipe("senter")
+                logger.debug("[spacy] Enabled senter pipe (has_pipe)")
             else:
                 # senter not available, reload with parser
                 logger.debug("[spacy] Senter not available, reloading with parser")
@@ -467,20 +471,26 @@ class SpacyServer(BaseTextServer):
 
         # Sanitize text for consistent TTS processing
         sanitized_text = sanitize_text_for_tts(text)
+        logger.debug(f"[spacy] Text sanitized: {len(text)} -> {len(sanitized_text)} chars")
 
         if not sanitized_text:
+            logger.debug("[spacy] Empty text after sanitization, returning empty list")
             return []
 
         # Process text with spaCy
         logger.debug(f"[spacy] Processing {len(sanitized_text)} chars with {self.current_model_name}")
         doc = self.nlp(sanitized_text)
 
+        # Convert to list to allow counting and iteration
+        sentences = list(doc.sents)
+        logger.debug(f"[spacy] spaCy found {len(sentences)} sentences")
+
         segments: List[SegmentItem] = []
         current_segment_text = ""
         current_start = 0
         order_index = 0
 
-        for sent in doc.sents:
+        for sent in sentences:
             sent_text = sent.text.strip()
 
             if not sent_text:
@@ -565,6 +575,7 @@ class SpacyServer(BaseTextServer):
                 status="ok"
             ))
 
+        logger.debug(f"[spacy] Created {len(segments)} segments from {len(sentences)} sentences")
         return segments
 
 

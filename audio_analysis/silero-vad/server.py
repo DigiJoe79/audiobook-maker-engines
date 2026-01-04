@@ -127,18 +127,24 @@ class SileroVADServer(BaseQualityServer):
         rate, audio_data = scipy.io.wavfile.read(io.BytesIO(audio_bytes))
 
         # Convert to float32 and normalize to [-1, 1]
+        logger.debug(f"[silero-vad] Audio input | dtype: {audio_data.dtype} | shape: {audio_data.shape} | rate: {rate}Hz")
         if audio_data.dtype == np.int16:
             audio_float = audio_data.astype(np.float32) / 32768.0
+            logger.debug("[silero-vad] Converted int16 to float32")
         elif audio_data.dtype == np.int32:
             audio_float = audio_data.astype(np.float32) / 2147483648.0
+            logger.debug("[silero-vad] Converted int32 to float32")
         else:
             audio_float = audio_data.astype(np.float32)
+            logger.debug(f"[silero-vad] Using float32 directly (original: {audio_data.dtype})")
 
         # Resample to 16kHz if needed (Silero VAD expects 16kHz)
         if rate != 16000:
             from scipy import signal
+            original_samples = len(audio_float)
             num_samples = int(len(audio_float) * 16000 / rate)
             audio_float = signal.resample(audio_float, num_samples)
+            logger.debug(f"[silero-vad] Resampled: {original_samples} -> {num_samples} samples ({rate}Hz -> 16000Hz)")
             rate = 16000
 
         # Convert to torch tensor (keep on CPU for get_speech_timestamps)
@@ -149,12 +155,14 @@ class SileroVADServer(BaseQualityServer):
         # [{'start': 0, 'end': 16000}, ...]
         from silero_vad import get_speech_timestamps
 
+        logger.debug(f"[silero-vad] Running VAD on {len(audio_tensor)} samples")
         speech_timestamps = get_speech_timestamps(
             audio_tensor,
             self.vad_model,
             sampling_rate=rate,
             return_seconds=False  # Return sample indices
         )
+        logger.debug(f"[silero-vad] VAD found {len(speech_timestamps)} speech segments")
 
         # Calculate total duration
         total_samples = len(audio_float)
@@ -166,6 +174,7 @@ class SileroVADServer(BaseQualityServer):
             speech_samples += segment['end'] - segment['start']
 
         speech_duration_ms = (speech_samples / rate) * 1000
+        logger.debug(f"[silero-vad] Speech samples: {speech_samples} ({speech_duration_ms:.1f}ms)")
 
         # Calculate speech ratio (0-100)
         speech_ratio = (speech_duration_ms / total_duration_ms * 100) if total_duration_ms > 0 else 0.0
@@ -200,6 +209,7 @@ class SileroVADServer(BaseQualityServer):
         else:
             peak_db = -np.inf
         has_clipping = peak_db > thresholds.max_clipping_peak
+        logger.debug(f"[silero-vad] Peak amplitude: {peak_amplitude:.4f} ({peak_db:.1f}dB) | Clipping: {has_clipping}")
 
         # Calculate average volume (RMS in dB)
         rms = np.sqrt(np.mean(audio_float ** 2))
@@ -208,6 +218,7 @@ class SileroVADServer(BaseQualityServer):
         else:
             avg_volume_db = -np.inf
         low_volume = avg_volume_db < thresholds.min_average_volume
+        logger.debug(f"[silero-vad] RMS: {rms:.4f} ({avg_volume_db:.1f}dB) | Low volume: {low_volume}")
 
         # Determine quality score and status
         issues = []
@@ -350,12 +361,19 @@ class SileroVADServer(BaseQualityServer):
             quality_score -= 31
 
         # Low volume (max -10 points)
+        volume_penalty = 0
         if low_volume:
             volume_penalty = min(10, abs(avg_volume_db - thresholds.min_average_volume) / 2)
             quality_score -= int(volume_penalty)
 
         # Ensure score is in valid range
         quality_score = max(0, min(100, quality_score))
+
+        logger.debug(
+            f"[silero-vad] Quality penalties | "
+            f"Speech ratio: {speech_ratio_penalty} | Silence: {silence_penalty} | "
+            f"Clipping: {31 if has_clipping else 0} | Volume: {int(volume_penalty)}"
+        )
 
         # Build fields for UI
         # Keys are suffixes - Frontend prepends "quality.fields."

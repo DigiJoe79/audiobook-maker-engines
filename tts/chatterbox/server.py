@@ -84,6 +84,7 @@ class ChatterboxServer(BaseTTSServer):
 
     def get_available_models(self) -> List[ModelInfo]:
         """Return available Chatterbox models (only 'multilingual' supported)"""
+        logger.debug("[chatterbox] Returning available models (multilingual only)")
         return [
             ModelInfo(
                 name="multilingual",
@@ -179,6 +180,7 @@ class ChatterboxServer(BaseTTSServer):
 
         # Generate audio (limit to 300 characters as per Chatterbox recommendations)
         # Suppress progress bar and warnings during generation
+        logger.debug(f"[chatterbox] Starting generation with params: {generate_kwargs}")
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             wav_tensor = self.model.generate(
                 text[:300],
@@ -187,7 +189,9 @@ class ChatterboxServer(BaseTTSServer):
             )
 
         # Convert tensor to numpy array
+        logger.debug(f"[chatterbox] Generated tensor shape: {wav_tensor.shape}, dtype: {wav_tensor.dtype}")
         wav_array = wav_tensor.squeeze(0).cpu().numpy()
+        logger.debug(f"[chatterbox] Converted to numpy: shape={wav_array.shape}, dtype={wav_array.dtype}")
 
         # Convert to WAV bytes
         wav_bytes = audio_to_wav_bytes(wav_array, self.model.sr)

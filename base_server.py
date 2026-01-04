@@ -288,7 +288,10 @@ class BaseEngineServer(ABC):
         @self.app.post("/load", response_model=LoadResponse)
         async def load_endpoint(request: LoadRequest):
             """Load a specific model into memory"""
+            logger.debug(f"[{self.engine_name}] Load requested: {request.engine_model_name}")
+            logger.debug(f"[{self.engine_name}] Acquiring model lock...")
             async with self._model_lock:
+                logger.debug(f"[{self.engine_name}] Model lock acquired")
                 try:
                     self.status = "loading"
                     self.error_message = None
@@ -298,12 +301,14 @@ class BaseEngineServer(ABC):
                     # Unload current model first to free GPU memory (hotswap)
                     if self.model_loaded:
                         logger.info(f"[{self.engine_name}] Unloading current model before hotswap...")
+                        logger.debug(f"[{self.engine_name}] Hotswap: {self.current_model} -> {request.engine_model_name}")
                         await loop.run_in_executor(self._executor, self.unload_model)
                         # Cleanup is centralized here - engines don't need to do this
                         self.model_loaded = False
                         self.current_model = None
                         self._cleanup_gpu_memory()
                         gc.collect()
+                        logger.debug(f"[{self.engine_name}] Previous model unloaded, GPU memory cleared")
 
                     # Call engine-specific implementation in thread pool
                     # This prevents blocking the event loop during long loads
@@ -334,6 +339,7 @@ class BaseEngineServer(ABC):
             """Return available models for this engine"""
             try:
                 models = self.get_available_models()
+                logger.debug(f"[{self.engine_name}] Returning {len(models)} available models")
                 return ModelsResponse(
                     models=models,
                     default_model=self.default_model,
@@ -347,6 +353,7 @@ class BaseEngineServer(ABC):
         async def health_endpoint():
             """Health check"""
             try:
+                logger.debug(f"[{self.engine_name}] Health check requested | Status: {self.status}")
                 gpu_used, gpu_total = self._get_gpu_memory()
                 return HealthResponse(
                     status=self.status,
@@ -386,6 +393,7 @@ class BaseEngineServer(ABC):
         async def shutdown_endpoint():
             """Graceful shutdown request"""
             logger.info(f"[{self.engine_name}] Shutdown requested")
+            logger.debug(f"[{self.engine_name}] Current state before shutdown | Model loaded: {self.model_loaded}, Model: {self.current_model}")
             self.shutdown_requested = True
 
             # Unload model to free resources
@@ -401,6 +409,7 @@ class BaseEngineServer(ABC):
 
             # Shutdown executor
             self._executor.shutdown(wait=False)
+            logger.debug(f"[{self.engine_name}] Executor shutdown complete, scheduling server exit")
 
             # Schedule server shutdown after response is sent (100ms delay)
             if self.server:
@@ -495,6 +504,8 @@ class BaseEngineServer(ABC):
         """
         config = self._engine_config
 
+        logger.debug(f"[{self.engine_name}] Building engine info from config")
+
         # Parse upstream info
         upstream = None
         if 'upstream' in config:
@@ -504,6 +515,7 @@ class BaseEngineServer(ABC):
                 url=up.get('url', ''),
                 license=up.get('license', '')
             )
+            logger.debug(f"[{self.engine_name}] Parsed upstream: {up.get('name', '')}")
 
         # Parse parameters schema
         parameters: Dict[str, ParameterSchema] = {}
@@ -521,6 +533,7 @@ class BaseEngineServer(ABC):
                         readonly=param_config.get('readonly', False),
                         category=param_config.get('category')
                     )
+            logger.debug(f"[{self.engine_name}] Parsed {len(parameters)} parameters")
 
         # Parse models
         models: List[EngineModelConfig] = []
@@ -537,6 +550,7 @@ class BaseEngineServer(ABC):
                         display_name=display_name,
                         metadata=metadata
                     ))
+            logger.debug(f"[{self.engine_name}] Parsed {len(models)} models from config")
 
         # Parse variants for Docker discovery
         variants: List[VariantInfo] = []
@@ -548,6 +562,7 @@ class BaseEngineServer(ABC):
                         platforms=v.get('platforms', []),
                         requires_gpu=v.get('requires_gpu', False)
                     ))
+            logger.debug(f"[{self.engine_name}] Parsed {len(variants)} variants")
 
         # Determine requires_gpu from installation or variants
         # Note: Discovery service will override this based on matched variant tag
@@ -596,8 +611,8 @@ class BaseEngineServer(ABC):
                 used = torch.cuda.memory_allocated() // (1024 * 1024)
                 total = torch.cuda.get_device_properties(0).total_memory // (1024 * 1024)
                 return used, total
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"[{self.engine_name}] GPU memory query failed: {e}")
 
         return None, None
 
@@ -638,6 +653,7 @@ class BaseEngineServer(ABC):
                 self._device = "cuda" if torch.cuda.is_available() else "cpu"
             except ImportError:
                 self._device = "cpu"
+            logger.debug(f"[{self.engine_name}] Device detected: {self._device}")
         return self._device
 
     def _handle_processing_error(self, e: Exception, operation: str) -> None:

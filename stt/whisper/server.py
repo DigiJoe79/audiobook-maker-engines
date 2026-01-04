@@ -260,14 +260,18 @@ class WhisperServer(BaseQualityServer):
 
         # Unload previous model
         if self.whisper_model is not None:
+            logger.debug(f"[whisper] Unloading previous model before loading {model_name}")
             del self.whisper_model
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+                logger.debug("[whisper] CUDA cache cleared")
 
         # Model file paths
         model_file = f"{model_name}.pt"
         model_path = self.models_dir / model_file
         external_path = self.external_models_dir / model_file
+
+        logger.debug(f"[whisper] Model paths | models_dir: {model_path} | external: {external_path}")
 
         # Ensure directories exist
         self.models_dir.mkdir(parents=True, exist_ok=True)
@@ -278,6 +282,7 @@ class WhisperServer(BaseQualityServer):
             if external_path.exists():
                 # Model in external_models but not symlinked yet
                 logger.info(f"[whisper] Creating symlink for existing model: {model_name}")
+                logger.debug(f"[whisper] Symlink: {model_path} -> {external_path}")
                 model_path.symlink_to(external_path)
             else:
                 # Download to external_models_dir
@@ -288,10 +293,12 @@ class WhisperServer(BaseQualityServer):
                     torch.cuda.empty_cache()
                 # Create symlink
                 logger.info(f"[whisper] Creating symlink: {model_path} -> {external_path}")
+                logger.debug("[whisper] Download complete, symlink created")
                 model_path.symlink_to(external_path)
 
         # Load model from models_dir (will find baked-in or symlinked model)
         logger.info(f"[whisper] Loading model '{model_name}' on {self.device}...")
+        logger.debug(f"[whisper] Using download_root: {self.models_dir}")
         self.whisper_model = whisper.load_model(model_name, device=self.device, download_root=str(self.models_dir))
         self.current_model = model_name
         self.model_loaded = True
@@ -377,6 +384,11 @@ class WhisperServer(BaseQualityServer):
 
         # Perform text comparison if expected_text provided
         if expected_text:
+            logger.debug(
+                f"[whisper] Comparing transcription with expected text | "
+                f"Expected: {len(expected_text)} chars | "
+                f"Transcribed: {len(result.transcription)} chars"
+            )
             rules = pronunciation_rules or []
             whisper_words = [{"confidence": w.confidence} for w in result.words]
 
@@ -459,6 +471,8 @@ class WhisperServer(BaseQualityServer):
                 temp_file.write(audio_data)
                 temp_path = temp_file.name
 
+            logger.debug(f"[whisper] Temp file created: {temp_path} ({len(audio_data)} bytes)")
+
             try:
                 # Run Whisper
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
@@ -480,6 +494,12 @@ class WhisperServer(BaseQualityServer):
             transcription = result['text'].strip()
             segments = result.get('segments', [])
 
+            logger.debug(
+                f"[whisper] Transcription result | "
+                f"Text: '{transcription[:50]}{'...' if len(transcription) > 50 else ''}' | "
+                f"Segments: {len(segments)}"
+            )
+
             # Calculate confidence
             if segments:
                 confidences = [
@@ -487,8 +507,12 @@ class WhisperServer(BaseQualityServer):
                     for seg in segments
                 ]
                 overall_confidence = round(float(np.mean(confidences)) * 100)
+                logger.debug(f"[whisper] Segment confidences: {[round(c, 3) for c in confidences[:5]]}{'...' if len(confidences) > 5 else ''}")
             else:
                 overall_confidence = 90
+                logger.debug("[whisper] No segments, using default confidence 90")
+
+            logger.debug(f"[whisper] Overall confidence: {overall_confidence}%")
 
             # Extract words
             words = []

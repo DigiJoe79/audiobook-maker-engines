@@ -207,6 +207,7 @@ class BaseQualityServer(BaseEngineServer):
         self._setup_analyze_route()
 
         logger.info(f"[{self.engine_name}] Quality server initialized (type: {engine_type})")
+        logger.debug(f"[{self.engine_name}] Quality thresholds available for /analyze endpoint")
 
     def _setup_analyze_route(self):
         """Setup quality-specific /analyze endpoint"""
@@ -218,11 +219,19 @@ class BaseQualityServer(BaseEngineServer):
                 # Validate model is loaded and ready
                 self._require_model_ready()
 
+                logger.debug(
+                    f"[{self.engine_name}] Analyze request received | "
+                    f"Language: {request.language} | "
+                    f"Has expected_text: {request.expected_text is not None}"
+                )
+
                 # Get audio data
                 audio_bytes = None
                 if request.audio_base64:
+                    logger.debug(f"[{self.engine_name}] Reading audio from base64 data")
                     audio_bytes = request.get_audio_bytes()
                 elif request.audio_path:
+                    logger.debug(f"[{self.engine_name}] Reading audio from file: {request.audio_path}")
                     from pathlib import Path
                     audio_path = Path(request.audio_path)
                     if not audio_path.exists():
@@ -256,6 +265,13 @@ class BaseQualityServer(BaseEngineServer):
                         status_code=400,
                         detail="Invalid audio format: expected WAV file"
                     )
+                logger.debug(f"[{self.engine_name}] WAV header validation passed")
+
+                logger.debug(
+                    f"[{self.engine_name}] WAV validated | "
+                    f"Size: {len(audio_bytes)} bytes | "
+                    f"Thresholds: max_silence_warn={request.quality_thresholds.max_silence_duration_warning}ms"
+                )
 
                 logger.info(
                     f"[{self.engine_name}] Analyzing audio | "
@@ -265,6 +281,7 @@ class BaseQualityServer(BaseEngineServer):
                 )
 
                 self.status = "processing"
+                logger.debug(f"[{self.engine_name}] Status transition: ready -> processing")
 
                 # Call engine-specific implementation in thread pool
                 # This prevents blocking the event loop during analysis
@@ -281,6 +298,11 @@ class BaseQualityServer(BaseEngineServer):
                 )
 
                 self.status = "ready"
+
+                logger.debug(
+                    f"[{self.engine_name}] Analysis result | "
+                    f"Score: {result.quality_score} | Status: {result.quality_status}"
+                )
 
                 # Build response
                 return AnalyzeResponse(
