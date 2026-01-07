@@ -6,10 +6,10 @@
 # Core TTS - Maintained fork of Coqui TTS (original TTS package abandoned Dec 2023)
 coqui-tts>=0.27.0,<0.28.0
 
-# PyTorch - Pinned to 2.5.x for CUDA 11.8/12.1/12.4 compatibility
-# coqui-tts 0.27.x requires: torch >2.1, <2.9
-torch>=2.5.0,<2.6.0
-torchaudio>=2.5.0,<2.6.0
+# PyTorch - coqui-tts 0.27.x requires: torch >2.1, <2.9
+# PyTorch 2.7 + cu128 required for Blackwell (sm_120) support
+torch>=2.7.0,<2.9.0
+torchaudio>=2.7.0,<2.9.0
 
 # Transformers - Version range required by coqui-tts 0.27.x
 # coqui-tts 0.27.x requires: transformers >4.52.1, <4.56
@@ -28,5 +28,5 @@ PyYAML>=6.0.0,<7.0.0
 huggingface_hub>=0.20.0
 
 # CUDA support (optional, comment out for CPU-only)
-# Supports: CUDA 11.8, 12.1, 12.4
---extra-index-url https://download.pytorch.org/whl/cu118
+# PyTorch 2.7.0 + CUDA 12.8 required for Blackwell (sm_120)
+--extra-index-url https://download.pytorch.org/whl/cu128
