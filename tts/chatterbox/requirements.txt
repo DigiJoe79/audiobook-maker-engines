@@ -14,9 +14,10 @@ numpy>=1.24.0,<1.26.0
 cython
 
 # PyTorch with CUDA (install BEFORE chatterbox-tts)
-# pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
-torch==2.6.0
-torchaudio==2.6.0
+# PyTorch 2.7+ includes Blackwell (sm_100/sm_120) support
+# pip install torch==2.7.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu126
+torch==2.7.0
+torchaudio==2.7.0
 
 # Chatterbox TTS (install with --no-deps to preserve CUDA PyTorch)
 # pip install --no-build-isolation --no-deps chatterbox-tts
@@ -46,6 +47,6 @@ PyYAML>=6.0.0,<7.0.0
 # Audio processing (for resampling if needed)
 scipy>=1.11.0,<2.0.0
 
-# CUDA support - PyTorch 2.6.0 supports CUDA 11.8, 12.1, 12.4
+# CUDA support - PyTorch 2.7.0 supports CUDA 12.6 with Blackwell (sm_100/sm_120)
 # Uncomment for GPU acceleration:
-# --extra-index-url https://download.pytorch.org/whl/cu124
+# --extra-index-url https://download.pytorch.org/whl/cu126
