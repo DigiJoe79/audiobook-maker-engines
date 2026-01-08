@@ -10,9 +10,10 @@ loguru==0.7.2
 httpx>=0.28.0  # Required for Docker HEALTHCHECK
 PyYAML>=6.0.0,<7.0.0
 
-# PyTorch 2.9.1 (CUDA 13.0) - installed separately in setup script
-# torch==2.9.1
-# torchaudio==2.9.1
+# PyTorch 2.7.0 (CUDA 12.8) - installed separately in setup script
+# PyTorch 2.7 + cu128 required for Blackwell (sm_120) support
+# torch==2.7.0
+# torchaudio==2.7.0
 
 # Audio processing
 librosa
