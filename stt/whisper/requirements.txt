@@ -1,9 +1,9 @@
 # ============================================================================
 # Whisper STT Engine Dependencies
 # ============================================================================
-# Last Updated: 2025-12-04
+# Last Updated: 2026-01-07
 # Python: 3.12 (specified in engine.yaml)
-# Tested with: torch 2.5.1, torchaudio 2.5.1, openai-whisper 20250625
+# Tested with: torch 2.7.0, torchaudio 2.7.0, openai-whisper 20250625
 # ============================================================================
 
 # OpenAI Whisper
@@ -14,11 +14,10 @@ openai-whisper>=20250625
 
 # PyTorch ML Stack
 # IMPORTANT: torch and torchaudio versions MUST match
-# 2.9.x: torchaudio entered maintenance mode, deprecated APIs removed
-# 2.5.x-2.8.x: stable, all APIs available
-# CUDA: 2.5+ supports CUDA 11.8 and 12.x
-torch>=2.5.0,<3.0.0
-torchaudio>=2.5.0,<3.0.0
+# PyTorch 2.7 + cu128 required for Blackwell (sm_120) support
+# CUDA 12.8 required for Blackwell architecture
+torch>=2.7.0,<3.0.0
+torchaudio>=2.7.0,<3.0.0
 
 # Web Framework
 # FastAPI 0.115+ with upper bound for stability

@@ -5,7 +5,7 @@
 # Models are downloaded on-demand to /app/external_models
 # =============================================================================
 
-FROM nvidia/cuda:12.4.1-base-ubuntu22.04
+FROM nvidia/cuda:12.8.0-base-ubuntu22.04
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -42,12 +42,12 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 # -----------------------------------------------------------------------------
 # PyTorch with CUDA Support
 # -----------------------------------------------------------------------------
-# PyTorch 2.5.1 for stability (matches other GPU engines)
+# PyTorch 2.7 + cu128 required for Blackwell (sm_120) support
 # nosemgrep: dockerfile.audit.dockerfile-pip-extra-index-url.dockerfile-pip-extra-index-url -- torch/torchaudio are version-pinned; official PyTorch index
 RUN pip install --no-cache-dir \
-    torch==2.5.1 \
-    torchaudio==2.5.1 \
-    --extra-index-url https://download.pytorch.org/whl/cu124
+    torch==2.7.0 \
+    torchaudio==2.7.0 \
+    --extra-index-url https://download.pytorch.org/whl/cu128
 
 # -----------------------------------------------------------------------------
 # Application Dependencies
