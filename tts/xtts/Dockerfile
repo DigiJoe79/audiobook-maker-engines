@@ -38,7 +38,7 @@
 # ==============================================================================
 # Stage 1: Builder - Install dependencies
 # ==============================================================================
-FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04 AS builder
+FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04 AS builder
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -68,11 +68,12 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 WORKDIR /build
 COPY tts/xtts/requirements.txt .
 
-# Install PyTorch with CUDA 11.8 support first (separate layer for caching)
+# Install PyTorch with CUDA 12.8 support first (separate layer for caching)
+# PyTorch 2.7 + cu128 required for Blackwell (sm_120) support
 RUN pip install --no-cache-dir \
-    torch==2.5.1+cu118 \
-    torchaudio==2.5.1+cu118 \
-    --index-url https://download.pytorch.org/whl/cu118
+    torch==2.7.0 \
+    torchaudio==2.7.0 \
+    --index-url https://download.pytorch.org/whl/cu128
 
 # Install remaining requirements
 RUN pip install --no-cache-dir -r requirements.txt
@@ -80,7 +81,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ==============================================================================
 # Stage 2: Runtime - Minimal image with only runtime dependencies
 # ==============================================================================
-FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04 AS runtime
+FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04 AS runtime
 
 # Prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
