@@ -27,7 +27,7 @@
 # ==============================================================================
 # Stage 1: Builder - Install dependencies
 # ==============================================================================
-FROM nvidia/cuda:12.6.3-base-ubuntu22.04 AS builder
+FROM nvidia/cuda:12.8.0-base-ubuntu22.04 AS builder
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -69,12 +69,12 @@ RUN pip install --no-cache-dir \
     "numpy>=1.24.0,<1.26.0" \
     cython
 
-# Step 2: PyTorch with CUDA 12.6 support (BEFORE chatterbox-tts)
-# PyTorch 2.7+ includes Blackwell (sm_100/sm_120) support
+# Step 2: PyTorch with CUDA 12.8 support (BEFORE chatterbox-tts)
+# PyTorch 2.7 + cu128 required for Blackwell (sm_120) support
 RUN pip install --no-cache-dir \
     torch==2.7.0 \
     torchaudio==2.7.0 \
-    --index-url https://download.pytorch.org/whl/cu126
+    --index-url https://download.pytorch.org/whl/cu128
 
 # Step 3: Install pkuseg with --no-build-isolation (requires numpy pre-installed)
 RUN pip install --no-cache-dir --no-build-isolation spacy-pkuseg
@@ -111,7 +111,7 @@ RUN pip install --no-cache-dir \
 # ==============================================================================
 # Stage 2: Runtime - Minimal image with only runtime dependencies
 # ==============================================================================
-FROM nvidia/cuda:12.6.3-base-ubuntu22.04 AS runtime
+FROM nvidia/cuda:12.8.0-base-ubuntu22.04 AS runtime
 
 # Prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
