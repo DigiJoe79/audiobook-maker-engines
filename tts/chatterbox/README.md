@@ -153,12 +153,16 @@ Generate TTS audio with voice cloning.
 ```
 
 **Parameters:**
-- `text`: Text to synthesize (max 300 characters recommended)
+- `text`: Text to synthesize (max 3000 characters; split into chunks of at most 300 characters)
 - `language`: Language code (e.g., "en", "de", "ja")
 - `ttsSpeakerWav`: Speaker sample filename (required for voice cloning) or array of filenames
 - `parameters`: Optional engine parameters (defaults used if omitted)
 
 **Response:** Binary WAV audio (Content-Type: audio/wav)
+
+Requests longer than 300 characters are split at sentence or word boundaries. The chunker retains every source character, generates chunk audio in input order, and inserts 150 ms of silence between chunks. Text over 3000 characters is rejected with a recovery hint.
+
+Speaker conditionals are kept in a two-entry RAM-only LRU cache, keyed by the reference audio content and exaggeration setting. The cache is cleared when the model unloads or reloads. Generation timing logs include sample hashing, conditioning, synthesis, WAV encoding, and cache hit status; they do not include text or sample paths.
 
 **Error Responses:**
 ```json

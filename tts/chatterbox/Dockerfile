@@ -159,6 +159,8 @@ COPY base_tts_server.py ./
 
 # Copy Chatterbox engine files
 COPY tts/chatterbox/server.py ./
+COPY tts/chatterbox/conditioning_cache.py ./
+COPY tts/chatterbox/text_chunking.py ./
 COPY tts/chatterbox/engine.yaml ./
 
 # Copy generic entrypoint script

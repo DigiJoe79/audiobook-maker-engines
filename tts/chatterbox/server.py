@@ -11,6 +11,8 @@ import io
 import warnings
 import logging  # Only for suppressing third-party library logs
 import os
+import threading
+from time import perf_counter
 import numpy as np
 import torch
 
@@ -30,9 +32,12 @@ logging.getLogger('chatterbox.models.t3.inference.alignment_stream_analyzer').se
 logging.getLogger('perth').setLevel(logging.ERROR)
 
 # Add parent directory to path to import base_server
+sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from base_tts_server import BaseTTSServer, ModelInfo  # noqa: E402
 from loguru import logger  # noqa: E402
+from conditioning_cache import ConditionalsCache, prepare_or_reuse_conditionals  # noqa: E402
+from text_chunking import MAX_TOTAL_TEXT_CHARS, split_text  # noqa: E402
 
 # Import Chatterbox (after warnings/logging suppression)
 import contextlib  # noqa: E402
@@ -67,6 +72,8 @@ class ChatterboxServer(BaseTTSServer):
     def __init__(self):
         # Engine state (before super().__init__)
         self.model = None
+        self._model_lock = threading.RLock()
+        self._conditionals_cache = ConditionalsCache(max_entries=2)
 
         super().__init__(
             engine_name="chatterbox",
@@ -115,14 +122,17 @@ class ChatterboxServer(BaseTTSServer):
                 detail="Model files not found. Ensure model is baked into Docker image or mounted."
             )
 
-        logger.info(f"[chatterbox] Loading from local: {self.models_dir}")
-        self.model = ChatterboxMultilingualTTS.from_local(self.models_dir, self.device)
+        with self._model_lock:
+            self._conditionals_cache.clear()
+            logger.info("[chatterbox] Loading model files from the configured model directory")
+            model = ChatterboxMultilingualTTS.from_local(self.models_dir, self.device)
 
-        # Ensure model is on correct device
-        if hasattr(self.model, 'to') and str(getattr(self.model, 'device', None)) != self.device:
-            self.model.to(self.device)
+            # Ensure model is on correct device
+            if hasattr(model, 'to') and str(getattr(model, 'device', None)) != self.device:
+                model.to(self.device)
 
-        logger.info(f"[chatterbox] Model loaded successfully. Sample rate: {self.model.sr} Hz")
+            self.model = model
+            logger.info(f"[chatterbox] Model loaded successfully. Sample rate: {self.model.sr} Hz")
 
     def generate_audio(
         self,
@@ -135,23 +145,11 @@ class ChatterboxServer(BaseTTSServer):
         # Note: Model loaded check, speaker cloning validation, and max_text_length
         # validation are handled in base_tts_server.py
 
-        # Extract parameters with defaults
-        exaggeration = parameters.get("exaggeration", 0.5)
-        temperature = parameters.get("temperature", 0.8)
-        cfg_weight = parameters.get("cfg_weight", 0.5)
-        seed = parameters.get("seed", 0)
-
-        # Set random seed if specified
-        if seed != 0:
-            torch.manual_seed(int(seed))
-            if self.device == "cuda":
-                torch.cuda.manual_seed(int(seed))
-                torch.cuda.manual_seed_all(int(seed))
-            import random
-            random.seed(int(seed))
-            np.random.seed(int(seed))
-
-        logger.debug(f"[chatterbox] Generating: '{text[:50]}...' (lang={language})")
+        request_started_at = perf_counter()
+        exaggeration = float(parameters.get("exaggeration", 0.5))
+        temperature = float(parameters.get("temperature", 0.8))
+        cfg_weight = float(parameters.get("cfg_weight", 0.5))
+        seed = int(parameters.get("seed", 0))
 
         # Resolve speaker filename to full path in samples_dir
         # speaker_wav is now a filename (e.g., "uuid.wav") not a full path
@@ -165,47 +163,100 @@ class ChatterboxServer(BaseTTSServer):
                 if speaker_wav.strip():
                     audio_prompt_path = str(self.samples_dir / speaker_wav)
 
-        # Generate kwargs
-        generate_kwargs = {
-            "exaggeration": exaggeration,
-            "temperature": temperature,
-            "cfg_weight": cfg_weight,
-        }
+        max_text_length = self._engine_config.get("constraints", {}).get(
+            "max_text_length", MAX_TOTAL_TEXT_CHARS
+        )
+        chunks = split_text(text, max_total_chars=max_text_length)
+        sample_hash_ms = 0.0
+        conditioning_ms = 0.0
+        cache_hit: bool | None = None
+        effective_exaggeration = exaggeration
 
-        if audio_prompt_path:
-            generate_kwargs["audio_prompt_path"] = audio_prompt_path
-            logger.debug(f"[chatterbox] Using audio prompt: {audio_prompt_path}")
-        else:
-            logger.debug("[chatterbox] No audio prompt (using default voice)")
+        with self._model_lock:
+            if self.model is None:
+                raise RuntimeError("Chatterbox model is not loaded")
 
-        # Generate audio (limit to 300 characters as per Chatterbox recommendations)
-        # Suppress progress bar and warnings during generation
-        logger.debug(f"[chatterbox] Starting generation with params: {generate_kwargs}")
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            wav_tensor = self.model.generate(
-                text[:300],
-                language_id=language,
-                **generate_kwargs
-            )
+            # Seed and all mutable model state stay inside this lock.
+            if seed != 0:
+                torch.manual_seed(seed)
+                if self.device == "cuda":
+                    torch.cuda.manual_seed(seed)
+                    torch.cuda.manual_seed_all(seed)
+                import random
+                random.seed(seed)
+                np.random.seed(seed)
 
-        # Convert tensor to numpy array
-        logger.debug(f"[chatterbox] Generated tensor shape: {wav_tensor.shape}, dtype: {wav_tensor.dtype}")
-        wav_array = wav_tensor.squeeze(0).cpu().numpy()
-        logger.debug(f"[chatterbox] Converted to numpy: shape={wav_array.shape}, dtype={wav_array.dtype}")
+            if audio_prompt_path:
+                cache_hit, effective_exaggeration, sample_hash_ms, conditioning_ms = (
+                    prepare_or_reuse_conditionals(
+                        self.model,
+                        self._conditionals_cache,
+                        Path(audio_prompt_path),
+                        exaggeration,
+                    )
+                )
+                if not cache_hit:
+                    synchronization_started_at = perf_counter()
+                    self._synchronize_device()
+                    conditioning_ms += (perf_counter() - synchronization_started_at) * 1000
 
-        # Convert to WAV bytes
-        wav_bytes = audio_to_wav_bytes(wav_array, self.model.sr)
+            generated_chunks = []
+            synthesis_started_at = perf_counter()
+            for chunk in chunks:
+                self._synchronize_device()
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    wav_tensor = self.model.generate(
+                        chunk,
+                        language_id=language,
+                        exaggeration=effective_exaggeration,
+                        temperature=temperature,
+                        cfg_weight=cfg_weight,
+                    )
+                generated_chunks.append(wav_tensor.squeeze(0).detach().cpu().numpy())
+                self._synchronize_device()
+            synthesis_ms = (perf_counter() - synthesis_started_at) * 1000
 
-        logger.debug(f"[chatterbox] Generated {len(wav_bytes)} bytes")
+            encoding_started_at = perf_counter()
+            audio_parts = []
+            boundary_pause = np.zeros(round(self.model.sr * 0.15), dtype=generated_chunks[0].dtype)
+            for index, generated_audio in enumerate(generated_chunks):
+                audio_parts.append(generated_audio)
+                if index < len(generated_chunks) - 1:
+                    audio_parts.append(boundary_pause)
+            wav_array = np.concatenate(audio_parts)
+            wav_bytes = audio_to_wav_bytes(wav_array, self.model.sr)
+            wav_encoding_ms = (perf_counter() - encoding_started_at) * 1000
+
+        total_ms = (perf_counter() - request_started_at) * 1000
+        cache_status = "not_applicable" if cache_hit is None else ("hit" if cache_hit else "miss")
+        logger.info(
+            "[chatterbox] generation timing cache_hit={} chunks={} sample_hash_ms={:.1f} "
+            "conditioning_ms={:.1f} synthesis_ms={:.1f} wav_encoding_ms={:.1f} total_ms={:.1f}",
+            cache_status,
+            len(chunks),
+            sample_hash_ms,
+            conditioning_ms,
+            synthesis_ms,
+            wav_encoding_ms,
+            total_ms,
+        )
         return wav_bytes
+
+    def _synchronize_device(self) -> None:
+        """Synchronize CUDA so per-stage durations include asynchronous work."""
+
+        if self.device == "cuda" and torch.cuda.is_available():
+            torch.cuda.synchronize()
 
     def unload_model(self) -> None:
         """Free resources"""
-        if self.model is not None:
-            logger.info("[chatterbox] Unloading model...")
-            del self.model
-            self.model = None
-            # Note: GPU cleanup, gc.collect(), and state reset are handled by base_server.py
+        with self._model_lock:
+            self._conditionals_cache.clear()
+            if self.model is not None:
+                logger.info("[chatterbox] Unloading model...")
+                del self.model
+                self.model = None
+                # Note: GPU cleanup, gc.collect(), and state reset are handled by base_server.py
 
     def get_package_version(self) -> str:
         """Return Chatterbox package version for health endpoint"""
